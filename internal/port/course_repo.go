@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type CourseRepositor interface {
+type CourseRepository interface {
 	Create(ctx context.Context, course *domain.Course) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Course, error)
 	ListByRank(ctx context.Context, rank string) ([]domain.Course, error)
