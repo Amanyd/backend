@@ -140,7 +140,7 @@ type Page[T any] struct {
 ```go
 // Shared input validation. Uses go-playground/validator.
 // - var Validate *validator.Validate (singleton, registered custom rules)
-// - Custom tags: "rank" (valid Indian Air Force ranks), "role" (student|instructor)
+// - Custom tags: "rank" ("officer" | "agniveer"), "role" (student|instructor)
 // - func ValidateStruct(s any) error → returns *APIError with field-level details
 ```
 
@@ -244,8 +244,7 @@ type User struct {
     ID           uuid.UUID
     Name         string
     EnrollmentID string
-    Rank         string
-    Batch        string
+    Rank         string    // "officer" | "agniveer"
     Role         Role
     PasswordHash string
     CreatedAt    time.Time
@@ -260,7 +259,7 @@ type Course struct {
     ID           uuid.UUID
     Title        string
     Description  string
-    Rank         string    // e.g. "Flying Officer", "Flight Lieutenant"
+    Rank         string    // "officer" | "agniveer"
     InstructorID uuid.UUID
     CreatedAt    time.Time
     UpdatedAt    time.Time
@@ -529,8 +528,7 @@ CREATE TABLE users (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name           TEXT NOT NULL,
     enrollment_id  TEXT NOT NULL UNIQUE,
-    rank           TEXT NOT NULL,
-    batch          TEXT NOT NULL,
+    rank           TEXT NOT NULL CHECK (rank IN ('officer', 'agniveer')),
     role           TEXT NOT NULL CHECK (role IN ('student', 'instructor')),
     password_hash  TEXT NOT NULL,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -669,8 +667,8 @@ Write queries using sqlc annotations (`-- name:`, `:one`, `:many`, `:exec`, `:ex
 **Example** — `query/users.sql`:
 ```sql
 -- name: CreateUser :one
-INSERT INTO users (name, enrollment_id, rank, batch, role, password_hash)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO users (name, enrollment_id, rank, role, password_hash)
+VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
 -- name: GetUserByID :one
@@ -763,7 +761,6 @@ func (r *userRepo) Create(ctx context.Context, u *domain.User) error {
         Name:         u.Name,
         EnrollmentID: u.EnrollmentID,
         Rank:         u.Rank,
-        Batch:        u.Batch,
         Role:         string(u.Role),
         PasswordHash: u.PasswordHash,
     })
@@ -965,7 +962,7 @@ func (c *cache) AllowRequest(ctx context.Context, key string, rate, burst int) (
 ### 7.1 `user_service.go`
 
 ```
-- Register(name, enrollmentID, rank, batch, password, role) → User, error
+- Register(name, enrollmentID, rank, password, role) → User, error
     - Hash password with bcrypt (cost=12)
     - Check enrollment_id uniqueness
     - Insert via UserRepository

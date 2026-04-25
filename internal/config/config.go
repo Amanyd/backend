@@ -26,7 +26,7 @@ type ServerConfig struct {
 
 type DBConfig struct {
 	DatabaseURL       string        `mapstructure:"DATABASE_URL"`
-	DbMaxOpen         int           `mapstructure:"DB_MAX_OPEN_CONSS"`
+	DbMaxOpen         int           `mapstructure:"DB_MAX_OPEN_CONNS"`
 	DbMaxIdle         int           `mapstructure:"DB_MAX_IDLE_CONNS"`
 	DbConnMaxLifetime time.Duration `mapstructure:"DB_CONN_MAX_LIFETIME"`
 }

@@ -25,7 +25,6 @@ func (r *userRepo) Create(ctx context.Context, user *domain.User) error {
 		Name:         user.Name,
 		EnrollmentID: user.EnrollmentID,
 		Rank:         user.Rank,
-		Batch:        user.Batch,
 		Role:         string(user.Role),
 		PasswordHash: user.PasswordHash,
 	})
@@ -62,7 +61,6 @@ func toDomainUser(user gen.User) *domain.User {
 		Name:         user.Name,
 		EnrollmentID: user.EnrollmentID,
 		Rank:         user.Rank,
-		Batch:        user.Batch,
 		Role:         domain.Role(user.Role),
 		PasswordHash: user.PasswordHash,
 		CreatedAt:    user.CreatedAt,

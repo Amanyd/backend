@@ -11,11 +11,8 @@ import (
 var validate *validator.Validate
 
 var validRanks = map[string]bool{
-	"Flight Officer":   true,
-	"Flight Lietenant": true,
-	"Squadron Leader":  true,
-	"Wing Commander":   true,
-	"Group Captain":    true,
+	"officer":  true,
+	"agniveer": true,
 }
 
 func init() {

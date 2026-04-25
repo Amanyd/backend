@@ -18,7 +18,6 @@ type User struct {
 	Name         string
 	EnrollmentID string
 	Rank         string
-	Batch        string
 	Role         Role
 	PasswordHash string
 	CreatedAt    time.Time
