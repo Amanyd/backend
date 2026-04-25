@@ -12,9 +12,10 @@ import (
 )
 
 const allFilesReadyForCourse = `-- name: AllFilesReadyForCourse :one
-SELECT NOT EXISTS(
-    SELECT 1 FROM files WHERE course_id = $1 AND
-    ingest_status != 'ready'
+SELECT NOT EXISTS (
+    SELECT 1 FROM files f
+    JOIN lessons l ON l.id = f.lesson_id
+    WHERE l.course_id = $1 AND f.ingest_status != 'ready'
 ) AS all_ready
 `
 
@@ -26,30 +27,32 @@ func (q *Queries) AllFilesReadyForCourse(ctx context.Context, courseID uuid.UUID
 }
 
 const createFile = `-- name: CreateFile :one
-INSERT INTO files (course_id, file_name, minio_key, ingest_status)
-VALUES ($1,$2,$3,$4)
-RETURNING id, course_id, file_name, minio_key, ingest_status, created_at, updated_at
+INSERT INTO files (lesson_id, file_name, file_type, minio_key, ingest_status)
+VALUES ($1, $2, $3, $4, $5) RETURNING id, lesson_id, file_name, file_type, minio_key, ingest_status, created_at, updated_at
 `
 
 type CreateFileParams struct {
-	CourseID     uuid.UUID `json:"course_id"`
+	LessonID     uuid.UUID `json:"lesson_id"`
 	FileName     string    `json:"file_name"`
+	FileType     string    `json:"file_type"`
 	MinioKey     string    `json:"minio_key"`
 	IngestStatus string    `json:"ingest_status"`
 }
 
 func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, error) {
 	row := q.db.QueryRow(ctx, createFile,
-		arg.CourseID,
+		arg.LessonID,
 		arg.FileName,
+		arg.FileType,
 		arg.MinioKey,
 		arg.IngestStatus,
 	)
 	var i File
 	err := row.Scan(
 		&i.ID,
-		&i.CourseID,
+		&i.LessonID,
 		&i.FileName,
+		&i.FileType,
 		&i.MinioKey,
 		&i.IngestStatus,
 		&i.CreatedAt,
@@ -59,7 +62,7 @@ func (q *Queries) CreateFile(ctx context.Context, arg CreateFileParams) (File, e
 }
 
 const getFileByID = `-- name: GetFileByID :one
-SELECT id, course_id, file_name, minio_key, ingest_status, created_at, updated_at FROM files WHERE id = $1
+SELECT id, lesson_id, file_name, file_type, minio_key, ingest_status, created_at, updated_at FROM files WHERE id = $1
 `
 
 func (q *Queries) GetFileByID(ctx context.Context, id uuid.UUID) (File, error) {
@@ -67,8 +70,9 @@ func (q *Queries) GetFileByID(ctx context.Context, id uuid.UUID) (File, error) {
 	var i File
 	err := row.Scan(
 		&i.ID,
-		&i.CourseID,
+		&i.LessonID,
 		&i.FileName,
+		&i.FileType,
 		&i.MinioKey,
 		&i.IngestStatus,
 		&i.CreatedAt,
@@ -77,12 +81,12 @@ func (q *Queries) GetFileByID(ctx context.Context, id uuid.UUID) (File, error) {
 	return i, err
 }
 
-const listFilesByCourse = `-- name: ListFilesByCourse :many
-SELECT id, course_id, file_name, minio_key, ingest_status, created_at, updated_at FROM files WHERE course_id = $1 ORDER BY created_at DESC
+const listFilesByLesson = `-- name: ListFilesByLesson :many
+SELECT id, lesson_id, file_name, file_type, minio_key, ingest_status, created_at, updated_at FROM files WHERE lesson_id = $1 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListFilesByCourse(ctx context.Context, courseID uuid.UUID) ([]File, error) {
-	rows, err := q.db.Query(ctx, listFilesByCourse, courseID)
+func (q *Queries) ListFilesByLesson(ctx context.Context, lessonID uuid.UUID) ([]File, error) {
+	rows, err := q.db.Query(ctx, listFilesByLesson, lessonID)
 	if err != nil {
 		return nil, err
 	}
@@ -92,8 +96,9 @@ func (q *Queries) ListFilesByCourse(ctx context.Context, courseID uuid.UUID) ([]
 		var i File
 		if err := rows.Scan(
 			&i.ID,
-			&i.CourseID,
+			&i.LessonID,
 			&i.FileName,
+			&i.FileType,
 			&i.MinioKey,
 			&i.IngestStatus,
 			&i.CreatedAt,
@@ -110,8 +115,7 @@ func (q *Queries) ListFilesByCourse(ctx context.Context, courseID uuid.UUID) ([]
 }
 
 const updateFileIngestStatus = `-- name: UpdateFileIngestStatus :exec
-UPDATE files SET ingest_status = $2, updated_at = now()
-WHERE id = $1
+UPDATE files SET ingest_status = $2, updated_at = now() WHERE id = $1
 `
 
 type UpdateFileIngestStatusParams struct {

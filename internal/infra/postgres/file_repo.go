@@ -20,8 +20,9 @@ func NewFileRepo(pool *pgxpool.Pool) port.FileRepository {
 
 func (r *fileRepo) Create(ctx context.Context, f *domain.FileAsset) error {
 	row, err := r.q.CreateFile(ctx, gen.CreateFileParams{
-		CourseID:     f.CourseID,
+		LessonID:     f.LessonID,
 		FileName:     f.FileName,
+		FileType:     string(f.FileType),
 		MinioKey:     f.MinioKey,
 		IngestStatus: string(f.IngestStatus),
 	})
@@ -41,8 +42,8 @@ func (r *fileRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.FileAsset
 	return toDomainFile(row), nil
 }
 
-func (r *fileRepo) ListByCourse(ctx context.Context, courseID uuid.UUID) ([]domain.FileAsset, error) {
-	rows, err := r.q.ListFilesByCourse(ctx, courseID)
+func (r *fileRepo) ListByLesson(ctx context.Context, lessonID uuid.UUID) ([]domain.FileAsset, error) {
+	rows, err := r.q.ListFilesByLesson(ctx, lessonID)
 	if err != nil {
 		return nil, err
 	}
@@ -71,8 +72,9 @@ func (r *fileRepo) AllReadyForCourse(ctx context.Context, courseID uuid.UUID) (b
 func toDomainFile(f gen.File) *domain.FileAsset {
 	return &domain.FileAsset{
 		ID:           f.ID,
-		CourseID:     f.CourseID,
+		LessonID:     f.LessonID,
 		FileName:     f.FileName,
+		FileType:     domain.FileType(f.FileType),
 		MinioKey:     f.MinioKey,
 		IngestStatus: domain.IngestStatus(f.IngestStatus),
 		CreatedAt:    f.CreatedAt,

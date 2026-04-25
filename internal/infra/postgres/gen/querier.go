@@ -17,17 +17,20 @@ type Querier interface {
 	CreateChatSession(ctx context.Context, arg CreateChatSessionParams) (ChatSession, error)
 	CreateCourse(ctx context.Context, arg CreateCourseParams) (Course, error)
 	CreateFile(ctx context.Context, arg CreateFileParams) (File, error)
+	CreateLesson(ctx context.Context, arg CreateLessonParams) (Lesson, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (ChatMessage, error)
 	CreateQuestion(ctx context.Context, arg CreateQuestionParams) (Question, error)
 	CreateQuiz(ctx context.Context, arg CreateQuizParams) (Quiz, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteCourse(ctx context.Context, id uuid.UUID) error
+	DeleteLesson(ctx context.Context, id uuid.UUID) error
 	DeleteQuestionsByQuiz(ctx context.Context, quizID uuid.UUID) error
 	GetAttemptByID(ctx context.Context, id uuid.UUID) (Attempt, error)
 	GetChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSession, error)
 	GetCourseByID(ctx context.Context, id uuid.UUID) (Course, error)
 	GetCourseMetrics(ctx context.Context, dollar_1 uuid.UUID) (GetCourseMetricsRow, error)
 	GetFileByID(ctx context.Context, id uuid.UUID) (File, error)
+	GetLessonByID(ctx context.Context, id uuid.UUID) (Lesson, error)
 	GetOverview(ctx context.Context, instructorID uuid.UUID) (GetOverviewRow, error)
 	GetQuestionByID(ctx context.Context, id uuid.UUID) (Question, error)
 	GetQuizByCourseAndDifficulty(ctx context.Context, arg GetQuizByCourseAndDifficultyParams) (Quiz, error)
@@ -39,7 +42,8 @@ type Querier interface {
 	ListChatSessionsByUser(ctx context.Context, userID uuid.UUID) ([]ChatSession, error)
 	ListCoursesByInstructor(ctx context.Context, instructorID uuid.UUID) ([]Course, error)
 	ListCoursesByRank(ctx context.Context, rank string) ([]Course, error)
-	ListFilesByCourse(ctx context.Context, courseID uuid.UUID) ([]File, error)
+	ListFilesByLesson(ctx context.Context, lessonID uuid.UUID) ([]File, error)
+	ListLessonsByCourse(ctx context.Context, courseID uuid.UUID) ([]Lesson, error)
 	ListMessagesBySession(ctx context.Context, arg ListMessagesBySessionParams) ([]ChatMessage, error)
 	ListQuestionsByQuiz(ctx context.Context, quizID uuid.UUID) ([]Question, error)
 	ListQuizzesByCourse(ctx context.Context, courseID uuid.UUID) ([]Quiz, error)
@@ -47,6 +51,7 @@ type Querier interface {
 	UpdateAttempt(ctx context.Context, arg UpdateAttemptParams) error
 	UpdateCourse(ctx context.Context, arg UpdateCourseParams) (Course, error)
 	UpdateFileIngestStatus(ctx context.Context, arg UpdateFileIngestStatusParams) error
+	UpdateLesson(ctx context.Context, arg UpdateLessonParams) (Lesson, error)
 	UpdateQuizStatus(ctx context.Context, arg UpdateQuizStatusParams) error
 }
 

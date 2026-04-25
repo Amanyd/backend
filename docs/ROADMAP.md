@@ -266,7 +266,20 @@ type Course struct {
 }
 ```
 
-### 3.3 `internal/domain/file.go`
+### 3.3 `internal/domain/lesson.go`
+
+```go
+type Lesson struct {
+    ID        uuid.UUID
+    CourseID  uuid.UUID
+    Title     string
+    OrderIdx  int
+    CreatedAt time.Time
+    UpdatedAt time.Time
+}
+```
+
+### 3.4 `internal/domain/file.go`
 
 ```go
 type IngestStatus string
@@ -277,10 +290,18 @@ const (
     IngestFailed     IngestStatus = "failed"
 )
 
+type FileType string
+const (
+    FileTypePDF  FileType = "pdf"
+    FileTypePPT  FileType = "ppt"
+    FileTypeDOCX FileType = "docx"
+)
+
 type FileAsset struct {
     ID           uuid.UUID
-    CourseID     uuid.UUID
+    LessonID     uuid.UUID
     FileName     string
+    FileType     FileType
     MinioKey     string
     IngestStatus IngestStatus
     CreatedAt    time.Time
@@ -288,7 +309,7 @@ type FileAsset struct {
 }
 ```
 
-### 3.4 `internal/domain/quiz.go`
+### 3.5 `internal/domain/quiz.go`
 
 ```go
 type QuizStatus string
@@ -355,7 +376,7 @@ type Answer struct {
 }
 ```
 
-### 3.5 `internal/domain/chat.go`
+### 3.6 `internal/domain/chat.go`
 
 ```go
 type ChatSession struct {
@@ -389,7 +410,7 @@ type Message struct {
 }
 ```
 
-### 3.6 `internal/domain/analytics.go`
+### 3.7 `internal/domain/analytics.go`
 
 ```go
 type EventType string
@@ -413,7 +434,7 @@ type Metric struct {
 }
 ```
 
-### 3.7 `internal/domain/errors.go`
+### 3.8 `internal/domain/errors.go`
 
 ```go
 // Sentinel domain errors — handlers map these to HTTP status codes.
@@ -439,20 +460,32 @@ var (
 internal/port/
 ├── user_repo.go       → UserRepository
 ├── course_repo.go     → CourseRepository (includes ListByRank)
-├── file_repo.go       → FileRepository (includes UpdateIngestStatus, ListByCourse, AllReadyForCourse)
+├── lesson_repo.go     → LessonRepository (CRUD + ListByCourse)
+├── file_repo.go       → FileRepository (includes UpdateIngestStatus, ListByLesson, AllReadyForCourse)
 ├── quiz_repo.go       → QuizRepository (CRUD + attempts + answers + questions)
 ├── chat_repo.go       → ChatRepository (sessions + messages)
 └── analytics_repo.go  → AnalyticsRepository (record event, aggregate metrics)
 ```
 
-**Example** — `port/file_repo.go`:
+**`port/lesson_repo.go`**:
+```go
+type LessonRepository interface {
+    Create(ctx context.Context, lesson *domain.Lesson) error
+    GetByID(ctx context.Context, id uuid.UUID) (*domain.Lesson, error)
+    ListByCourse(ctx context.Context, courseID uuid.UUID) ([]domain.Lesson, error)
+    Update(ctx context.Context, lesson *domain.Lesson) error
+    Delete(ctx context.Context, id uuid.UUID) error
+}
+```
+
+**`port/file_repo.go`**:
 ```go
 type FileRepository interface {
     Create(ctx context.Context, file *domain.FileAsset) error
     GetByID(ctx context.Context, id uuid.UUID) (*domain.FileAsset, error)
-    ListByCourse(ctx context.Context, courseID uuid.UUID) ([]domain.FileAsset, error)
+    ListByLesson(ctx context.Context, lessonID uuid.UUID) ([]domain.FileAsset, error)
     UpdateIngestStatus(ctx context.Context, fileID uuid.UUID, status domain.IngestStatus) error
-    AllReadyForCourse(ctx context.Context, courseID uuid.UUID) (bool, error) // Check if all files are ingested
+    AllReadyForCourse(ctx context.Context, courseID uuid.UUID) (bool, error)
 }
 ```
 
@@ -556,13 +589,29 @@ CREATE INDEX idx_courses_rank ON courses(rank);
 CREATE INDEX idx_courses_instructor ON courses(instructor_id);
 ```
 
-#### `00003_files.up.sql`
+#### `00003_lessons.up.sql`
+
+```sql
+CREATE TABLE lessons (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    course_id  UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    title      TEXT NOT NULL,
+    order_idx  INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_lessons_course ON lessons(course_id);
+```
+
+#### `00004_files.up.sql`
 
 ```sql
 CREATE TABLE files (
     id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    course_id      UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    lesson_id      UUID NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
     file_name      TEXT NOT NULL,
+    file_type      TEXT NOT NULL CHECK (file_type IN ('pdf', 'ppt', 'docx')),
     minio_key      TEXT NOT NULL,
     ingest_status  TEXT NOT NULL DEFAULT 'pending'
                    CHECK (ingest_status IN ('pending', 'processing', 'ready', 'failed')),
@@ -570,11 +619,11 @@ CREATE TABLE files (
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_files_course ON files(course_id);
+CREATE INDEX idx_files_lesson ON files(lesson_id);
 CREATE INDEX idx_files_status ON files(ingest_status);
 ```
 
-#### `00004_quizzes.up.sql`
+#### `00005_quizzes.up.sql`
 
 ```sql
 CREATE TABLE quizzes (
@@ -617,7 +666,7 @@ CREATE TABLE answers (
 );
 ```
 
-#### `00005_chat.up.sql`
+#### `00006_chat.up.sql`
 
 ```sql
 CREATE TABLE chat_sessions (
@@ -643,7 +692,7 @@ CREATE TABLE chat_messages (
 CREATE INDEX idx_chat_messages_session ON chat_messages(session_id);
 ```
 
-#### `00006_analytics.up.sql`
+#### `00007_analytics.up.sql`
 
 ```sql
 CREATE TABLE events (
@@ -696,25 +745,48 @@ ORDER BY created_at DESC;
 SELECT * FROM courses WHERE id = $1;
 ```
 
-**Example** — `query/files.sql`:
+**`query/lessons.sql`**:
+```sql
+-- name: CreateLesson :one
+INSERT INTO lessons (course_id, title, order_idx)
+VALUES ($1, $2, $3) RETURNING *;
+
+-- name: GetLessonByID :one
+SELECT * FROM lessons WHERE id = $1;
+
+-- name: ListLessonsByCourse :many
+SELECT * FROM lessons WHERE course_id = $1
+ORDER BY order_idx ASC;
+
+-- name: UpdateLesson :one
+UPDATE lessons SET title = $2, order_idx = $3, updated_at = now()
+WHERE id = $1 RETURNING *;
+
+-- name: DeleteLesson :exec
+DELETE FROM lessons WHERE id = $1;
+```
+
+**`query/files.sql`**:
 ```sql
 -- name: CreateFile :one
-INSERT INTO files (course_id, file_name, minio_key, ingest_status)
-VALUES ($1, $2, $3, $4) RETURNING *;
+INSERT INTO files (lesson_id, file_name, file_type, minio_key, ingest_status)
+VALUES ($1, $2, $3, $4, $5) RETURNING *;
+
+-- name: GetFileByID :one
+SELECT * FROM files WHERE id = $1;
+
+-- name: ListFilesByLesson :many
+SELECT * FROM files WHERE lesson_id = $1 ORDER BY created_at DESC;
 
 -- name: UpdateFileIngestStatus :exec
 UPDATE files SET ingest_status = $2, updated_at = now() WHERE id = $1;
 
--- name: ListFilesByCourse :many
-SELECT * FROM files WHERE course_id = $1 ORDER BY created_at DESC;
-
 -- name: AllFilesReadyForCourse :one
 SELECT NOT EXISTS (
-    SELECT 1 FROM files WHERE course_id = $1 AND ingest_status != 'ready'
+    SELECT 1 FROM files f
+    JOIN lessons l ON l.id = f.lesson_id
+    WHERE l.course_id = $1 AND f.ingest_status != 'ready'
 ) AS all_ready;
-
--- name: GetFileByID :one
-SELECT * FROM files WHERE id = $1;
 ```
 
 ### 5.3 `sqlc.yaml` Configuration
@@ -745,28 +817,50 @@ sql:
 
 Each file wraps the sqlc-generated `gen/` code and satisfies a `port/` interface.
 
-**Pattern**:
+**Pattern** — `internal/infra/postgres/file_repo.go`:
 ```go
-// internal/infra/postgres/user_repo.go
-type userRepo struct {
+type fileRepo struct {
     q *gen.Queries
 }
 
-func NewUserRepo(pool *pgxpool.Pool) port.UserRepository {
-    return &userRepo{q: gen.New(pool)}
+func NewFileRepo(pool *pgxpool.Pool) port.FileRepository {
+    return &fileRepo{q: gen.New(pool)}
 }
 
-func (r *userRepo) Create(ctx context.Context, u *domain.User) error {
-    row, err := r.q.CreateUser(ctx, gen.CreateUserParams{
-        Name:         u.Name,
-        EnrollmentID: u.EnrollmentID,
-        Rank:         u.Rank,
-        Role:         string(u.Role),
-        PasswordHash: u.PasswordHash,
+func (r *fileRepo) Create(ctx context.Context, f *domain.FileAsset) error {
+    row, err := r.q.CreateFile(ctx, gen.CreateFileParams{
+        LessonID:     f.LessonID,
+        FileName:     f.FileName,
+        FileType:     string(f.FileType),
+        MinioKey:     f.MinioKey,
+        IngestStatus: string(f.IngestStatus),
     })
     if err != nil { return err }
-    u.ID = row.ID
-    u.CreatedAt = row.CreatedAt
+    f.ID = row.ID
+    f.CreatedAt = row.CreatedAt
+    return nil
+}
+```
+
+**Pattern** — `internal/infra/postgres/lesson_repo.go`:
+```go
+type lessonRepo struct {
+    q *gen.Queries
+}
+
+func NewLessonRepo(pool *pgxpool.Pool) port.LessonRepository {
+    return &lessonRepo{q: gen.New(pool)}
+}
+
+func (r *lessonRepo) Create(ctx context.Context, l *domain.Lesson) error {
+    row, err := r.q.CreateLesson(ctx, gen.CreateLessonParams{
+        CourseID: l.CourseID,
+        Title:    l.Title,
+        OrderIdx: int32(l.OrderIdx),
+    })
+    if err != nil { return err }
+    l.ID = row.ID
+    l.CreatedAt = row.CreatedAt
     return nil
 }
 ```
@@ -983,25 +1077,29 @@ func (c *cache) AllowRequest(ctx context.Context, key string, rate, burst int) (
 - ListByInstructor(instructorID) → []Course  // instructors see their own courses
 - Update(courseID, instructorID, updates) → Course, error  // ownership check
 - Delete(courseID, instructorID) → error
+- CreateLesson(courseID, instructorID, title, orderIdx) → Lesson, error
+- ListLessons(courseID) → []Lesson, error
+- UpdateLesson(lessonID, instructorID, title, orderIdx) → Lesson, error
+- DeleteLesson(lessonID, instructorID) → error
 ```
 
 ### 7.3 `file_service.go`
 
 ```
-- InitUpload(courseID, fileName, instructorID) → { uploadURL, fileID }, error
-    1. Create FileAsset in DB (status=pending)
-    2. Generate MinIO presigned PUT URL
-    3. Return both to frontend
+- InitUpload(lessonID, fileName, fileType, instructorID) → { uploadURL, fileID }, error
+    1. Verify instructor owns the course (via lesson.CourseID)
+    2. Create FileAsset in DB (status=pending)
+    3. Generate MinIO presigned PUT URL
+    4. Return both to frontend
 - ConfirmUpload(fileID, instructorID) → error
-    1. Verify file ownership
-    2. Publish NATS message to rag.ingest.request:
+    1. Verify file ownership (file → lesson → course → instructor)
+    2. Resolve course_id from lesson.CourseID
+    3. Publish NATS message to rag.ingest.request:
        { bucket, key, course_id, file_id, file_name, teacher_id }
-    3. Update status → "processing"
+    4. Update status → "processing"
 - GetIngestStatus(fileID) → IngestStatus
 - GetViewURL(fileID, userID) → string
-    1. Check user has access to the course
-    2. Generate MinIO presigned GET URL
-- ListByCourse(courseID) → []FileAsset
+- ListByLesson(lessonID) → []FileAsset
 ```
 
 ### 7.4 `chat_service.go`
@@ -1081,7 +1179,7 @@ func (c *cache) AllowRequest(ctx context.Context, key string, rate, burst int) (
 **Logic**:
 1. Parse JSON payload.
 2. Update `files.ingest_status` → `"ready"` or `"failed"`.
-3. **Critical**: Check if ALL files for this `course_id` are now `"ready"`.
+3. **Critical**: Resolve `course_id` from `file → lesson → course`. Check if ALL files for this course are now `"ready"` (via `AllReadyForCourse` which JOINs through `lessons`).
 4. If all ready → publish **exactly 3 messages** to `quiz.generate.request`:
    ```json
    {"course_id": "...", "difficulty": "easy",   "limit_chunks": 20}
@@ -1142,6 +1240,7 @@ A manual re-trigger helper that can be called from the quiz handler to re-publis
 func NewRouter(
     userH    *UserHandler,
     courseH  *CourseHandler,
+    lessonH  *LessonHandler,
     fileH    *FileHandler,
     quizH    *QuizHandler,
     chatH    *ChatHandler,
@@ -1182,7 +1281,14 @@ func NewRouter(
             r.Post("/api/v1/courses", courseH.Create)
             r.Put("/api/v1/courses/{courseId}", courseH.Update)
             r.Delete("/api/v1/courses/{courseId}", courseH.Delete)
-            r.Post("/api/v1/courses/{courseId}/files/upload", fileH.InitUpload)
+
+            // Lessons
+            r.Post("/api/v1/courses/{courseId}/lessons", lessonH.Create)
+            r.Put("/api/v1/lessons/{lessonId}", lessonH.Update)
+            r.Delete("/api/v1/lessons/{lessonId}", lessonH.Delete)
+
+            // Files (upload to a lesson)
+            r.Post("/api/v1/lessons/{lessonId}/files/upload", fileH.InitUpload)
             r.Post("/api/v1/files/{fileId}/confirm", fileH.ConfirmUpload)
             r.Post("/api/v1/quizzes/{quizId}/reset", quizH.Reset)
 
@@ -1191,8 +1297,11 @@ func NewRouter(
             r.Get("/api/v1/analytics/{courseId}", analytH.CourseMetrics)
         })
 
+        // Lessons (student + instructor)
+        r.Get("/api/v1/courses/{courseId}/lessons", lessonH.List)
+
         // Files (student + instructor)
-        r.Get("/api/v1/courses/{courseId}/files", fileH.ListByCourse)
+        r.Get("/api/v1/lessons/{lessonId}/files", fileH.ListByLesson)
         r.Get("/api/v1/files/{fileId}/status", fileH.IngestStatus)
         r.Get("/api/v1/files/{fileId}/view", fileH.ViewURL)
 
@@ -1331,6 +1440,7 @@ func main() {
     // 8. Create repositories
     userRepo := postgres.NewUserRepo(pool)
     courseRepo := postgres.NewCourseRepo(pool)
+    lessonRepo := postgres.NewLessonRepo(pool)
     fileRepo := postgres.NewFileRepo(pool)
     quizRepo := postgres.NewQuizRepo(pool)
     chatRepo := postgres.NewChatRepo(pool)

@@ -68,12 +68,22 @@ type Event struct {
 
 type File struct {
 	ID           uuid.UUID `json:"id"`
-	CourseID     uuid.UUID `json:"course_id"`
+	LessonID     uuid.UUID `json:"lesson_id"`
 	FileName     string    `json:"file_name"`
+	FileType     string    `json:"file_type"`
 	MinioKey     string    `json:"minio_key"`
 	IngestStatus string    `json:"ingest_status"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type Lesson struct {
+	ID        uuid.UUID `json:"id"`
+	CourseID  uuid.UUID `json:"course_id"`
+	Title     string    `json:"title"`
+	OrderIdx  int32     `json:"order_idx"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Question struct {
