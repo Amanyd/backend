@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/Amanyd/backend/internal/config"
@@ -170,7 +171,7 @@ func runMigrations(dsn string, log *zap.Logger) {
 		log.Fatal("migration source", zap.Error(err))
 	}
 
-	m, err := migrate.NewWithSourceInstance("iofs", source, "pgx5://"+dsn[len("postgres://"):])
+	m, err := migrate.NewWithSourceInstance("iofs", source, "pgx5://"+strings.TrimPrefix(dsn, "postgres://"))
 	if err != nil {
 		log.Fatal("migration init", zap.Error(err))
 	}
