@@ -1,6 +1,10 @@
-.PHONY: dev test lint migrate-up migrate-down sqlc mock build
+.PHONY: dev test lint migrate-up migrate-down sqlc mock build stop
 
-dev:
+stop:
+	-@kill -9 $$(lsof -t -i:8080) 2>/dev/null || true
+	@echo "Server stopped."
+
+dev: stop
 	go run ./cmd/server
 
 build:

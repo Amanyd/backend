@@ -32,6 +32,7 @@ func (s *CourseService) Create(ctx context.Context, title, desc, rank string, in
 		return nil, err
 	}
 	s.cache.Delete(ctx, "courses:rank:"+rank)
+	s.cache.Delete(ctx, "courses:all")
 	return course, nil
 }
 
@@ -77,6 +78,27 @@ func (s *CourseService) ListByRank(ctx context.Context, rank string) ([]domain.C
 	return courses, nil
 }
 
+func (s *CourseService) ListAll(ctx context.Context) ([]domain.Course, error) {
+	key := "courses:all"
+
+	if cached, err := s.cache.Get(ctx, key); err == nil {
+		var courses []domain.Course
+		if json.Unmarshal([]byte(cached), &courses) == nil {
+			return courses, nil
+		}
+	}
+
+	courses, err := s.courses.ListAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if data, err := json.Marshal(courses); err == nil {
+		s.cache.Set(ctx, key, string(data), 5*time.Minute)
+	}
+	return courses, nil
+}
+
 func (s *CourseService) ListByInstructor(ctx context.Context, instructorID uuid.UUID) ([]domain.Course, error) {
 	return s.courses.ListByInstructor(ctx, instructorID)
 }
@@ -100,6 +122,7 @@ func (s *CourseService) Update(ctx context.Context, courseID, instructorID uuid.
 
 	s.cache.Delete(ctx, "course:"+courseID.String())
 	s.cache.Delete(ctx, "courses:rank:"+oldRank)
+	s.cache.Delete(ctx, "courses:all")
 	if rank != oldRank {
 		s.cache.Delete(ctx, "courses:rank:"+rank)
 	}
@@ -119,6 +142,7 @@ func (s *CourseService) Delete(ctx context.Context, courseID, instructorID uuid.
 	}
 	s.cache.Delete(ctx, "course:"+courseID.String())
 	s.cache.Delete(ctx, "courses:rank:"+course.Rank)
+	s.cache.Delete(ctx, "courses:all")
 	return nil
 }
 

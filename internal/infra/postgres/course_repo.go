@@ -13,11 +13,12 @@ import (
 )
 
 type courseRepo struct {
-	q *gen.Queries
+        q    *gen.Queries
+        pool *pgxpool.Pool
 }
 
 func NewCourseRepo(pool *pgxpool.Pool) port.CourseRepository {
-	return &courseRepo{q: gen.New(pool)}
+        return &courseRepo{q: gen.New(pool), pool: pool}
 }
 
 func (r *courseRepo) Create(ctx context.Context, course *domain.Course) error {
@@ -45,6 +46,24 @@ func (r *courseRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Course,
 		return nil, err
 	}
 	return toDomainCourse(row), nil
+}
+
+func (r *courseRepo) ListAll(ctx context.Context) ([]domain.Course, error) {
+        rows, err := r.pool.Query(ctx, "SELECT id, title, description, rank, instructor_id, created_at, updated_at FROM courses ORDER BY created_at DESC")
+        if err != nil {
+                return nil, err
+        }
+        defer rows.Close()
+
+        var courses []domain.Course
+        for rows.Next() {
+                var c gen.Course
+                if err := rows.Scan(&c.ID, &c.Title, &c.Description, &c.Rank, &c.InstructorID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+                        return nil, err
+                }
+                courses = append(courses, *toDomainCourse(c))
+        }
+        return courses, rows.Err()
 }
 
 func (r *courseRepo) ListByRank(ctx context.Context, rank string) ([]domain.Course, error) {

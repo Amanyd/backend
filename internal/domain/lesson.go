@@ -1,16 +1,16 @@
 package domain
 
 import (
-	"time"
+"time"
 
-	"github.com/google/uuid"
+"github.com/google/uuid"
 )
 
 type Lesson struct {
-	ID        uuid.UUID
-	CourseID  uuid.UUID
-	Title     string
-	OrderIdx  int
-	CreatedAt time.Time
-	UpdatedAt time.Time
+ID        uuid.UUID `json:"id"`
+CourseID  uuid.UUID `json:"course_id"`
+Title     string    `json:"title"`
+OrderIdx  int       `json:"order_idx"`
+CreatedAt time.Time `json:"created_at"`
+UpdatedAt time.Time `json:"updated_at"`
 }

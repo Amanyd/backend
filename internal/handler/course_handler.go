@@ -63,7 +63,7 @@ func (h *CourseHandler) List(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if claims.Role == "instructor" {
-		courses, err = h.svc.ListByInstructor(r.Context(), claims.UserID)
+		courses, err = h.svc.ListAll(r.Context())
 	} else {
 		courses, err = h.svc.ListByRank(r.Context(), claims.Rank)
 	}

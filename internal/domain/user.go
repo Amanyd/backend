@@ -1,25 +1,25 @@
 package domain
 
 import (
-	"time"
+"time"
 
-	"github.com/google/uuid"
+"github.com/google/uuid"
 )
 
 type Role string
 
 const (
-	RoleStudent    Role = "student"
-	RoleInstructor Role = "instructor"
+RoleStudent    Role = "student"
+RoleInstructor Role = "instructor"
 )
 
 type User struct {
-	ID           uuid.UUID
-	Name         string
-	EnrollmentID string
-	Rank         string
-	Role         Role
-	PasswordHash string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+ID           uuid.UUID `json:"id"`
+Name         string    `json:"name"`
+EnrollmentID string    `json:"enrollment_id"`
+Rank         string    `json:"rank"`
+Role         Role      `json:"role"`
+PasswordHash string    `json:"-"`
+CreatedAt    time.Time `json:"created_at"`
+UpdatedAt    time.Time `json:"updated_at"`
 }
