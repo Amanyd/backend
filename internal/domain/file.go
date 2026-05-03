@@ -24,12 +24,12 @@ const (
 )
 
 type FileAsset struct {
-	ID           uuid.UUID
-	LessonID     uuid.UUID
-	FileName     string
-	FileType     FileType
-	MinioKey     string
-	IngestStatus IngestStatus
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID           uuid.UUID    `json:"id"`
+	LessonID     uuid.UUID    `json:"lesson_id"`
+	FileName     string       `json:"file_name"`
+	FileType     FileType     `json:"file_type"`
+	MinioKey     string       `json:"minio_key"`
+	IngestStatus IngestStatus `json:"ingest_status"`
+	CreatedAt    time.Time    `json:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at"`
 }

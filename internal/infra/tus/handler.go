@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awscreds "github.com/aws/aws-sdk-go-v2/credentials"
@@ -46,8 +47,10 @@ func NewTUSHandler(cfg config.MinIOConfig, deps TUSDeps, logger *zap.Logger) (*h
 	store.UseIn(composer)
 
 	h, err := handler.NewHandler(handler.Config{
-		BasePath:      "/api/v1/files/tus/",
-		StoreComposer: composer,
+		BasePath:                "/api/v1/files/tus/",
+		StoreComposer:           composer,
+		NotifyCompleteUploads:   true,
+		NotifyCreatedUploads:    true,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("tus handler: %w", err)
@@ -109,7 +112,12 @@ func handleUploadComplete(ctx context.Context, event handler.HookEvent, deps TUS
 		return fmt.Errorf("instructor %s does not own course %s", instructorID, course.ID)
 	}
 
-	minioKey := fmt.Sprintf("courses/%s/%s/%s", course.ID, uuid.New(), fileName)
+	// The S3 store generates IDs in the format "objectKey+multipartUploadID".
+	// We only need the objectKey portion to reference the object in MinIO.
+	minioKey := event.Upload.ID
+	if idx := strings.Index(minioKey, "+"); idx > 0 {
+		minioKey = minioKey[:idx]
+	}
 
 	file := &domain.FileAsset{
 		LessonID:     lessonID,
