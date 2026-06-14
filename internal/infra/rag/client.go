@@ -13,9 +13,10 @@ import (
 )
 
 type ragClient struct {
-	baseURL string
-	token   string
-	http    *http.Client
+	baseURL    string
+	token      string
+	http       *http.Client // for non-streaming (short timeout)
+	httpStream *http.Client // for SSE streaming (no timeout; context drives cancellation)
 }
 
 func NewRAGClient(baseURL, token string) port.RagClient {
@@ -25,17 +26,21 @@ func NewRAGClient(baseURL, token string) port.RagClient {
 		http: &http.Client{
 			Timeout: 60 * time.Second,
 		},
+		// No Timeout on the streaming client: http.Client.Timeout covers the
+		// entire response including body reads, which would cut off long LLM
+		// generations. Cancellation is handled via the request context instead.
+		httpStream: &http.Client{},
 	}
 }
 
 func (c *ragClient) ChatStream(ctx context.Context, req port.ChatRequest) (io.ReadCloser, error) {
 	req.Stream = true
-	return c.doRequest(ctx, req)
+	return c.doRequest(ctx, req, true)
 }
 
 func (c *ragClient) Chat(ctx context.Context, req port.ChatRequest) (*port.ChatResponse, error) {
 	req.Stream = false
-	body, err := c.doRequest(ctx, req)
+	body, err := c.doRequest(ctx, req, false)
 	if err != nil {
 		return nil, err
 	}
@@ -48,16 +53,16 @@ func (c *ragClient) Chat(ctx context.Context, req port.ChatRequest) (*port.ChatR
 	return &resp, nil
 }
 
-func (c *ragClient) doRequest(ctx context.Context, req port.ChatRequest) (io.ReadCloser, error) {
+func (c *ragClient) doRequest(ctx context.Context, req port.ChatRequest, stream bool) (io.ReadCloser, error) {
 	payload, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("rag marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(
+	httpReq, err := 		http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		c.baseURL+"/api/v1/chat",
+		c.baseURL+"/api/v1/chat/",
 		bytes.NewReader(payload),
 	)
 	if err != nil {
@@ -67,7 +72,11 @@ func (c *ragClient) doRequest(ctx context.Context, req port.ChatRequest) (io.Rea
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("X-Internal-Token", c.token)
 
-	resp, err := c.http.Do(httpReq)
+	client := c.http
+	if stream {
+		client = c.httpStream
+	}
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("rag http do: %w", err)
 	}

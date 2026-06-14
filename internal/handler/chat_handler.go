@@ -98,6 +98,11 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
+	// Flush headers immediately so the client knows the connection is alive.
+	// Without this, the upstream proxy (Next.js) will time out waiting for
+	// the first SSE token while the LLM is still generating.
+	flusher.Flush()
+
 	scanner := bufio.NewScanner(stream)
 	for scanner.Scan() {
 		fmt.Fprintf(w, "%s\n", scanner.Text())

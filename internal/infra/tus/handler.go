@@ -47,10 +47,11 @@ func NewTUSHandler(cfg config.MinIOConfig, deps TUSDeps, logger *zap.Logger) (*h
 	store.UseIn(composer)
 
 	h, err := handler.NewHandler(handler.Config{
-		BasePath:                "/api/v1/files/tus/",
-		StoreComposer:           composer,
-		NotifyCompleteUploads:   true,
-		NotifyCreatedUploads:    true,
+		BasePath:              "/api/v1/files/tus/",
+		StoreComposer:         composer,
+		NotifyCompleteUploads: true,
+		NotifyCreatedUploads:  true,
+		Cors:                  &handler.CorsConfig{Disable: true},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("tus handler: %w", err)

@@ -48,7 +48,8 @@ func (h *CourseHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	course, err := h.svc.GetByID(r.Context(), id)
+	claims := GetClaims(r)
+	course, err := h.svc.GetByID(r.Context(), id, string(claims.Role), claims.UserID)
 	if err != nil {
 		apierr.WriteJSON(w, mapDomainError(err))
 		return
@@ -105,6 +106,21 @@ func (h *CourseHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apierr.WriteData(w, http.StatusOK, course)
+}
+
+func (h *CourseHandler) Finalize(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "courseId"))
+	if err != nil {
+		apierr.WriteJSON(w, apierr.BadRequest("invalid course id"))
+		return
+	}
+
+	claims := GetClaims(r)
+	if err := h.svc.Finalize(r.Context(), id, claims.UserID); err != nil {
+		apierr.WriteJSON(w, mapDomainError(err))
+		return
+	}
+	apierr.WriteData(w, http.StatusOK, map[string]string{"status": "finalized"})
 }
 
 func (h *CourseHandler) Delete(w http.ResponseWriter, r *http.Request) {

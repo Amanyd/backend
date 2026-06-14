@@ -15,6 +15,8 @@ SELECT * FROM quizzes WHERE course_id = $1 ORDER BY difficulty ASC;
 -- name: UpdateQuizStatus :exec
 UPDATE quizzes SET status = $2, updated_at = now() WHERE id = $1;
 
+-- name: DeleteQuizzesByCourse :exec
+DELETE FROM quizzes WHERE course_id = $1;
 
 -- name: CreateQuestion :one
 INSERT INTO questions (quiz_id, type, question, choices, answer, order_idx)

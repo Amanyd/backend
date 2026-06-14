@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/Amanyd/backend/internal/domain"
@@ -31,7 +32,16 @@ func StartIngestDoneWorker(ctx context.Context, js jetstream.JetStream, deps Ing
 	log.Info("ingest_done_worker started")
 
 	return nats.ConsumeLoop(ctx, cons, func(msg jetstream.Msg) {
-		if err := handleIngestDone(ctx, msg, deps, log); err != nil {
+		// If the parent context is already cancelled (shutdown), ack the message
+		// so it doesn't get redelivered in an infinite error loop.
+		select {
+		case <-ctx.Done():
+			msg.Ack()
+			return
+		default:
+		}
+
+		if err := handleIngestDone(context.Background(), msg, deps, log); err != nil {
 			log.Error("ingest_done_worker handle failed", zap.Error(err))
 			msg.Nak()
 			return
@@ -91,13 +101,28 @@ func handleIngestDone(ctx context.Context, msg jetstream.Msg, deps IngestDoneWor
 	log.Info("all files ready, triggering quiz generation", zap.String("course_id", lesson.CourseID.String()))
 
 	for _, diff := range difficulties {
-		quiz := &domain.Quiz{
-			CourseID:   lesson.CourseID,
-			Difficulty: diff,
-			Status:     domain.QuizGenerating,
-		}
-		if err := deps.Quizzes.CreateQuiz(ctx, quiz); err != nil {
-			return fmt.Errorf("create quiz %s: %w", diff, err)
+		quiz, err := deps.Quizzes.GetQuizByCourseAndDifficulty(ctx, lesson.CourseID, diff)
+		if err != nil {
+			if !errors.Is(err, domain.ErrNotFound) {
+				return fmt.Errorf("get quiz %s: %w", diff, err)
+			}
+			// No existing quiz — create new.
+			quiz = &domain.Quiz{
+				CourseID:   lesson.CourseID,
+				Difficulty: diff,
+				Status:     domain.QuizGenerating,
+			}
+			if err := deps.Quizzes.CreateQuiz(ctx, quiz); err != nil {
+				return fmt.Errorf("create quiz %s: %w", diff, err)
+			}
+		} else {
+			// Existing quiz — delete old questions and reset to generating.
+			if err := deps.Quizzes.DeleteQuestionsByQuiz(ctx, quiz.ID); err != nil {
+				return fmt.Errorf("delete questions for quiz %s: %w", diff, err)
+			}
+			if err := deps.Quizzes.UpdateQuizStatus(ctx, quiz.ID, domain.QuizGenerating); err != nil {
+				return fmt.Errorf("update quiz status %s: %w", diff, err)
+			}
 		}
 
 		payload, err := json.Marshal(map[string]any{

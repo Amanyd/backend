@@ -82,6 +82,10 @@ func (r *quizRepo) UpdateQuizStatus(ctx context.Context, id uuid.UUID, status do
 	})
 }
 
+func (r *quizRepo) DeleteQuizzesByCourse(ctx context.Context, courseID uuid.UUID) error {
+	return r.q.DeleteQuizzesByCourse(ctx, courseID)
+}
+
 func toDomainQuiz(q gen.Quiz) *domain.Quiz {
 	return &domain.Quiz{
 		ID:         q.ID,

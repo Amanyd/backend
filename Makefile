@@ -17,10 +17,10 @@ lint:
 	golangci-lint run ./...
 
 migrate-up:
-	migrate -path internal/infra/postgres/migrations -database "$$DATABASE_URL" up
+	@set -a; [ -f .env ] && . ./.env; set +a; migrate -path internal/infra/postgres/migrations -database "$$DATABASE_URL" up
 
 migrate-down:
-	migrate -path internal/infra/postgres/migrations -database "$$DATABASE_URL" down 1
+	@set -a; [ -f .env ] && . ./.env; set +a; migrate -path internal/infra/postgres/migrations -database "$$DATABASE_URL" down 1
 
 sqlc:
 	cd internal/infra/postgres && sqlc generate

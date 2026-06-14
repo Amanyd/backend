@@ -34,9 +34,9 @@ func NewRouter(
 	r.Use(middleware.RealIP)
 	r.Use(RequestLogger(log))
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(30 * time.Second))
+
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   []string{"http://localhost:3000"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "Tus-Resumable", "Upload-Length", "Upload-Metadata", "Upload-Offset"},
 		ExposedHeaders:   []string{"Link", "Location", "Tus-Resumable", "Upload-Offset", "Upload-Length"},
@@ -52,6 +52,7 @@ func NewRouter(
 	r.Group(func(r chi.Router) {
 		r.Use(JWTAuthMiddleware(cfg.JWT.JWTAccessSecret))
 		r.Use(RateLimitMiddleware(rl, 60, 10))
+		r.Use(middleware.Timeout(30 * time.Second))
 
 		r.Get("/api/v1/users/me", userH.Me)
 
@@ -71,7 +72,6 @@ func NewRouter(
 
 		r.Get("/api/v1/chat/sessions", chatH.ListSessions)
 		r.Post("/api/v1/chat/sessions", chatH.CreateSession)
-		r.Post("/api/v1/chat/sessions/{sessionId}/message", chatH.SendMessage)
 		r.Get("/api/v1/chat/sessions/{sessionId}/history", chatH.GetHistory)
 
 		r.Group(func(r chi.Router) {
@@ -79,18 +79,43 @@ func NewRouter(
 
 			r.Post("/api/v1/courses", courseH.Create)
 			r.Put("/api/v1/courses/{courseId}", courseH.Update)
+			r.Post("/api/v1/courses/{courseId}/finalize", courseH.Finalize)
 			r.Delete("/api/v1/courses/{courseId}", courseH.Delete)
 
 			r.Post("/api/v1/courses/{courseId}/lessons", lessonH.Create)
 			r.Put("/api/v1/lessons/{lessonId}", lessonH.Update)
 			r.Delete("/api/v1/lessons/{lessonId}", lessonH.Delete)
 
-			r.Handle("/api/v1/files/tus/*", http.StripPrefix("/api/v1/files/tus", tusH))
 			r.Post("/api/v1/quizzes/{quizId}/reset", quizH.Reset)
 
 			r.Get("/api/v1/analytics", analytH.Overview)
 			r.Get("/api/v1/analytics/{courseId}", analytH.CourseMetrics)
 		})
+	})
+
+	// Chat streaming route — outside the Timeout middleware group because
+	// SSE streams can run for the full duration of LLM generation (which
+	// can exceed 30s with a local model). The context is kept alive by the
+	// client connection; cancellation is handled naturally when the client
+	// disconnects or the stream ends.
+	r.Group(func(r chi.Router) {
+		r.Use(JWTAuthMiddleware(cfg.JWT.JWTAccessSecret))
+		r.Use(RateLimitMiddleware(rl, 60, 10))
+		r.Post("/api/v1/chat/sessions/{sessionId}/message", chatH.SendMessage)
+	})
+
+	// TUS upload routes — mounted outside the Timeout middleware group
+	// because file uploads can take much longer than 30 seconds.
+	// Chi's r.Mount only sets an internal route-context path; it does NOT
+	// rewrite r.URL.Path. tusd's internal router reads r.URL.Path directly
+	// (strings.Trim(r.URL.Path, "/")) and needs it to be "/" for POST
+	// creation. http.StripPrefix rewrites r.URL.Path so tusd sees the
+	// correct stripped path. Location headers remain correct because tusd
+	// builds them from its config BasePath, not from the request path.
+	r.Group(func(r chi.Router) {
+		r.Use(JWTAuthMiddleware(cfg.JWT.JWTAccessSecret))
+		r.Use(RBACMiddleware(domain.RoleInstructor))
+		r.Mount("/api/v1/files/tus", http.StripPrefix("/api/v1/files/tus", tusH))
 	})
 
 	return r
