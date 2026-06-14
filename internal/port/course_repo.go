@@ -14,5 +14,6 @@ type CourseRepository interface {
         ListByRank(ctx context.Context, rank string) ([]domain.Course, error)
         ListByInstructor(ctx context.Context, instructorID uuid.UUID) ([]domain.Course, error)
         Update(ctx context.Context, course *domain.Course) error
+        Publish(ctx context.Context, id uuid.UUID) error
         Delete(ctx context.Context, id uuid.UUID) error
 }

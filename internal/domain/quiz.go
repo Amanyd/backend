@@ -24,12 +24,12 @@ const (
 )
 
 type Quiz struct {
-	ID         uuid.UUID
-	CourseID   uuid.UUID
-	Difficulty Difficulty
-	Status     QuizStatus
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID         uuid.UUID  `json:"id"`
+	CourseID   uuid.UUID  `json:"course_id"`
+	Difficulty Difficulty `json:"difficulty"`
+	Status     QuizStatus `json:"status"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
 type QuestionType string
@@ -40,34 +40,34 @@ const (
 )
 
 type Choice struct {
-	Label string // "A", "B", "C", "D"
-	Text  string
+	Label string `json:"label"`
+	Text  string `json:"text"`
 }
 
 type Question struct {
-	ID       uuid.UUID
-	QuizID   uuid.UUID
-	Type     QuestionType
-	Question string
-	Choices  []Choice
-	Answer   string
-	OrderIdx int
+	ID       uuid.UUID    `json:"id"`
+	QuizID   uuid.UUID    `json:"quiz_id"`
+	Type     QuestionType `json:"type"`
+	Question string       `json:"question"`
+	Choices  []Choice      `json:"choices,omitempty"`
+	Answer   string       `json:"answer"`
+	OrderIdx int          `json:"order_idx"`
 }
 
 type Attempt struct {
-	ID        uuid.UUID
-	QuizID    uuid.UUID
-	UserID    uuid.UUID
-	Score     float64
-	Total     int
-	StartedAt time.Time
-	EndedAt   *time.Time
+	ID        uuid.UUID  `json:"id"`
+	QuizID    uuid.UUID  `json:"quiz_id"`
+	UserID    uuid.UUID  `json:"user_id"`
+	Score     float64    `json:"score"`
+	Total     int        `json:"total"`
+	StartedAt time.Time  `json:"started_at"`
+	EndedAt   *time.Time `json:"ended_at,omitempty"`
 }
 
 type Answer struct {
-	ID         uuid.UUID
-	AttemptID  uuid.UUID
-	QuestionID uuid.UUID
-	UserAnswer string
-	IsCorrect  bool
+	ID         uuid.UUID `json:"id"`
+	AttemptID  uuid.UUID `json:"attempt_id"`
+	QuestionID uuid.UUID `json:"question_id"`
+	UserAnswer string    `json:"user_answer"`
+	IsCorrect  bool      `json:"is_correct"`
 }

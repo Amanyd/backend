@@ -45,8 +45,8 @@ func (s *QuizService) ListByCourse(ctx context.Context, courseID uuid.UUID) ([]d
 }
 
 type QuizWithQuestions struct {
-	Quiz      domain.Quiz
-	Questions []domain.Question
+	Quiz      domain.Quiz       `json:"quiz"`
+	Questions []domain.Question `json:"questions,omitempty"`
 }
 
 func (s *QuizService) GetQuiz(ctx context.Context, quizID uuid.UUID) (*QuizWithQuestions, error) {
@@ -147,8 +147,8 @@ func (s *QuizService) FinishAttempt(ctx context.Context, attemptID uuid.UUID) (*
 }
 
 type AttemptResults struct {
-	Attempt domain.Attempt
-	Answers []domain.Answer
+	Attempt domain.Attempt  `json:"attempt"`
+	Answers []domain.Answer `json:"answers,omitempty"`
 }
 
 func (s *QuizService) GetResults(ctx context.Context, attemptID, userID uuid.UUID) (*AttemptResults, error) {

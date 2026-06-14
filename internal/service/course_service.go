@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Amanyd/backend/internal/domain"
+	"github.com/Amanyd/backend/internal/infra/nats"
 	"github.com/Amanyd/backend/internal/port"
 	"github.com/google/uuid"
 )
@@ -14,11 +16,13 @@ import (
 type CourseService struct {
 	courses port.CourseRepository
 	lessons port.LessonRepository
+	quizzes port.QuizRepository
+	queue   port.MessageQueue
 	cache   port.Cache
 }
 
-func NewCourseService(courses port.CourseRepository, lessons port.LessonRepository, cache port.Cache) *CourseService {
-	return &CourseService{courses: courses, lessons: lessons, cache: cache}
+func NewCourseService(courses port.CourseRepository, lessons port.LessonRepository, quizzes port.QuizRepository, queue port.MessageQueue, cache port.Cache) *CourseService {
+	return &CourseService{courses: courses, lessons: lessons, quizzes: quizzes, queue: queue, cache: cache}
 }
 
 func (s *CourseService) Create(ctx context.Context, title, desc, rank string, instructorID uuid.UUID) (*domain.Course, error) {
@@ -27,6 +31,7 @@ func (s *CourseService) Create(ctx context.Context, title, desc, rank string, in
 		Description:  desc,
 		Rank:         rank,
 		InstructorID: instructorID,
+		Published:    false,
 	}
 	if err := s.courses.Create(ctx, course); err != nil {
 		return nil, err
@@ -36,12 +41,15 @@ func (s *CourseService) Create(ctx context.Context, title, desc, rank string, in
 	return course, nil
 }
 
-func (s *CourseService) GetByID(ctx context.Context, courseID uuid.UUID) (*domain.Course, error) {
+func (s *CourseService) GetByID(ctx context.Context, courseID uuid.UUID, userRole string, userID uuid.UUID) (*domain.Course, error) {
 	key := "course:" + courseID.String()
 
 	if cached, err := s.cache.Get(ctx, key); err == nil {
 		var course domain.Course
 		if json.Unmarshal([]byte(cached), &course) == nil {
+			if !course.Published && userRole != "instructor" {
+				return nil, domain.ErrNotFound
+			}
 			return &course, nil
 		}
 	}
@@ -49,6 +57,10 @@ func (s *CourseService) GetByID(ctx context.Context, courseID uuid.UUID) (*domai
 	course, err := s.courses.GetByID(ctx, courseID)
 	if err != nil {
 		return nil, err
+	}
+
+	if !course.Published && userRole != "instructor" {
+		return nil, domain.ErrNotFound
 	}
 
 	if data, err := json.Marshal(course); err == nil {
@@ -127,6 +139,75 @@ func (s *CourseService) Update(ctx context.Context, courseID, instructorID uuid.
 		s.cache.Delete(ctx, "courses:rank:"+rank)
 	}
 	return course, nil
+}
+
+func (s *CourseService) Publish(ctx context.Context, courseID, instructorID uuid.UUID) error {
+	course, err := s.courses.GetByID(ctx, courseID)
+	if err != nil {
+		return err
+	}
+	if course.InstructorID != instructorID {
+		return domain.ErrForbidden
+	}
+	if err := s.courses.Publish(ctx, courseID); err != nil {
+		return err
+	}
+	s.cache.Delete(ctx, "course:"+courseID.String())
+	s.cache.Delete(ctx, "courses:all")
+	s.cache.Delete(ctx, "courses:rank:"+course.Rank)
+	return nil
+}
+
+func (s *CourseService) Finalize(ctx context.Context, courseID, instructorID uuid.UUID) error {
+	course, err := s.courses.GetByID(ctx, courseID)
+	if err != nil {
+		return err
+	}
+	if course.InstructorID != instructorID {
+		return domain.ErrForbidden
+	}
+
+	// Publish the course if not already published.
+	if !course.Published {
+		if err := s.courses.Publish(ctx, courseID); err != nil {
+			return err
+		}
+	}
+
+	// Delete old quizzes and regenerate.
+	if err := s.quizzes.DeleteQuizzesByCourse(ctx, courseID); err != nil {
+		return fmt.Errorf("delete quizzes: %w", err)
+	}
+
+	for _, diff := range []domain.Difficulty{domain.DifficultyEasy, domain.DifficultyMedium, domain.DifficultyHard} {
+		quiz := &domain.Quiz{
+			CourseID:   courseID,
+			Difficulty: diff,
+			Status:     domain.QuizGenerating,
+		}
+		if err := s.quizzes.CreateQuiz(ctx, quiz); err != nil {
+			return fmt.Errorf("create quiz %s: %w", diff, err)
+		}
+
+		payload, err := json.Marshal(map[string]any{
+			"course_id":    courseID.String(),
+			"difficulty":   string(diff),
+			"limit_chunks": 20,
+		})
+		if err != nil {
+			return fmt.Errorf("marshal quiz request: %w", err)
+		}
+
+		if err := s.queue.Publish(ctx, nats.SubjectQuizRequest, payload); err != nil {
+			return fmt.Errorf("publish quiz request %s: %w", diff, err)
+		}
+	}
+
+	s.cache.Delete(ctx, "course:"+courseID.String())
+	s.cache.Delete(ctx, "quizzes:course:"+courseID.String())
+	s.cache.Delete(ctx, "courses:all")
+	s.cache.Delete(ctx, "courses:rank:"+course.Rank)
+	return nil
 }
 
 func (s *CourseService) Delete(ctx context.Context, courseID, instructorID uuid.UUID) error {

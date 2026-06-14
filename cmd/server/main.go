@@ -98,7 +98,7 @@ func main() {
 
 	// Services
 	userSvc := service.NewUserService(userRepo, cfg.JWT)
-	courseSvc := service.NewCourseService(courseRepo, lessonRepo, cache)
+	courseSvc := service.NewCourseService(courseRepo, lessonRepo, quizRepo, queue, cache)
 	fileSvc := service.NewFileService(fileRepo, storage, cache)
 	chatSvc := service.NewChatService(chatRepo, courseRepo, userRepo, ragClient)
 	quizSvc := service.NewQuizService(quizRepo, courseRepo, queue, cache)

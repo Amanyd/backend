@@ -27,6 +27,7 @@ func (r *courseRepo) Create(ctx context.Context, course *domain.Course) error {
 		Description:  course.Description,
 		Rank:         course.Rank,
 		InstructorID: course.InstructorID,
+		Published:    course.Published,
 	})
 	if err != nil {
 		return err
@@ -49,7 +50,7 @@ func (r *courseRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Course,
 }
 
 func (r *courseRepo) ListAll(ctx context.Context) ([]domain.Course, error) {
-        rows, err := r.pool.Query(ctx, "SELECT id, title, description, rank, instructor_id, created_at, updated_at FROM courses ORDER BY created_at DESC")
+        rows, err := r.pool.Query(ctx, "SELECT id, title, description, rank, instructor_id, published, created_at, updated_at FROM courses ORDER BY created_at DESC")
         if err != nil {
                 return nil, err
         }
@@ -58,7 +59,7 @@ func (r *courseRepo) ListAll(ctx context.Context) ([]domain.Course, error) {
         courses := []domain.Course{}
         for rows.Next() {
                 var c gen.Course
-                if err := rows.Scan(&c.ID, &c.Title, &c.Description, &c.Rank, &c.InstructorID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+                if err := rows.Scan(&c.ID, &c.Title, &c.Description, &c.Rank, &c.InstructorID, &c.Published, &c.CreatedAt, &c.UpdatedAt); err != nil {
                         return nil, err
                 }
                 courses = append(courses, *toDomainCourse(c))
@@ -96,6 +97,7 @@ func (r *courseRepo) Update(ctx context.Context, course *domain.Course) error {
 		Title:       course.Title,
 		Description: course.Description,
 		Rank:        course.Rank,
+		Published:   course.Published,
 	})
 	if err != nil {
 		return err
@@ -103,9 +105,15 @@ func (r *courseRepo) Update(ctx context.Context, course *domain.Course) error {
 	course.UpdatedAt = row.UpdatedAt
 	return nil
 }
+
+func (r *courseRepo) Publish(ctx context.Context, id uuid.UUID) error {
+	return r.q.PublishCourse(ctx, id)
+}
+
 func (r *courseRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.q.DeleteCourse(ctx, id)
 }
+
 func toDomainCourse(course gen.Course) *domain.Course {
 	return &domain.Course{
 		ID:           course.ID,
@@ -113,6 +121,7 @@ func toDomainCourse(course gen.Course) *domain.Course {
 		Description:  course.Description,
 		Rank:         course.Rank,
 		InstructorID: course.InstructorID,
+		Published:    course.Published,
 		CreatedAt:    course.CreatedAt,
 		UpdatedAt:    course.UpdatedAt,
 	}

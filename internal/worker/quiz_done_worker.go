@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/Amanyd/backend/internal/domain"
@@ -26,7 +27,16 @@ func StartQuizDoneWorker(ctx context.Context, js jetstream.JetStream, deps QuizD
 	log.Info("quiz_done_worker started")
 
 	return nats.ConsumeLoop(ctx, cons, func(msg jetstream.Msg) {
-		if err := handleQuizDone(ctx, msg, deps, log); err != nil {
+		// If the parent context is already cancelled (shutdown), ack the message
+		// so it doesn't get redelivered in an infinite error loop.
+		select {
+		case <-ctx.Done():
+			msg.Ack()
+			return
+		default:
+		}
+
+		if err := handleQuizDone(context.Background(), msg, deps, log); err != nil {
 			log.Error("quiz_done_worker handle failed", zap.Error(err))
 			msg.Nak()
 			return
@@ -68,6 +78,14 @@ func handleQuizDone(ctx context.Context, msg jetstream.Msg, deps QuizDoneWorkerD
 
 	quiz, err := deps.Quizzes.GetQuizByCourseAndDifficulty(ctx, courseID, difficulty)
 	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			log.Warn("quiz_done quiz not found, dropping",
+				zap.String("course_id", payload.CourseID),
+				zap.String("difficulty", payload.Difficulty),
+			)
+			msg.Ack()
+			return nil
+		}
 		return fmt.Errorf("get quiz: %w", err)
 	}
 
