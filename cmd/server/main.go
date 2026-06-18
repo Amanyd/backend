@@ -124,8 +124,6 @@ func main() {
 		if err := worker.StartIngestDoneWorker(workerCtx, js, worker.IngestDoneWorkerDeps{
 			Files:   fileRepo,
 			Lessons: lessonRepo,
-			Quizzes: quizRepo,
-			Queue:   queue,
 		}, log); err != nil {
 			log.Error("ingest_done_worker stopped", zap.Error(err))
 		}

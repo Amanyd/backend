@@ -3,7 +3,6 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/Amanyd/backend/internal/domain"
@@ -17,11 +16,7 @@ import (
 type IngestDoneWorkerDeps struct {
 	Files   port.FileRepository
 	Lessons port.LessonRepository
-	Quizzes port.QuizRepository
-	Queue   port.MessageQueue
 }
-
-var difficulties = []domain.Difficulty{domain.DifficultyEasy, domain.DifficultyMedium, domain.DifficultyHard}
 
 func StartIngestDoneWorker(ctx context.Context, js jetstream.JetStream, deps IngestDoneWorkerDeps, log *zap.Logger) error {
 	cons, err := nats.CreateOrUpdateConsumer(ctx, js, nats.StreamIngestDone, nats.DurableIngestDone, nats.SubjectIngestDone)
@@ -93,50 +88,10 @@ func handleIngestDone(ctx context.Context, msg jetstream.Msg, deps IngestDoneWor
 	if err != nil {
 		return fmt.Errorf("check all ready: %w", err)
 	}
-	if !allReady {
+	if allReady {
+		log.Info("all files ready for course", zap.String("course_id", lesson.CourseID.String()))
+	} else {
 		log.Info("ingest_done not all files ready yet", zap.String("course_id", lesson.CourseID.String()))
-		return nil
-	}
-
-	log.Info("all files ready, triggering quiz generation", zap.String("course_id", lesson.CourseID.String()))
-
-	for _, diff := range difficulties {
-		quiz, err := deps.Quizzes.GetQuizByCourseAndDifficulty(ctx, lesson.CourseID, diff)
-		if err != nil {
-			if !errors.Is(err, domain.ErrNotFound) {
-				return fmt.Errorf("get quiz %s: %w", diff, err)
-			}
-			// No existing quiz — create new.
-			quiz = &domain.Quiz{
-				CourseID:   lesson.CourseID,
-				Difficulty: diff,
-				Status:     domain.QuizGenerating,
-			}
-			if err := deps.Quizzes.CreateQuiz(ctx, quiz); err != nil {
-				return fmt.Errorf("create quiz %s: %w", diff, err)
-			}
-		} else {
-			// Existing quiz — delete old questions and reset to generating.
-			if err := deps.Quizzes.DeleteQuestionsByQuiz(ctx, quiz.ID); err != nil {
-				return fmt.Errorf("delete questions for quiz %s: %w", diff, err)
-			}
-			if err := deps.Quizzes.UpdateQuizStatus(ctx, quiz.ID, domain.QuizGenerating); err != nil {
-				return fmt.Errorf("update quiz status %s: %w", diff, err)
-			}
-		}
-
-		payload, err := json.Marshal(map[string]any{
-			"course_id":    lesson.CourseID.String(),
-			"difficulty":   string(diff),
-			"limit_chunks": 20,
-		})
-		if err != nil {
-			return fmt.Errorf("marshal quiz request: %w", err)
-		}
-
-		if err := deps.Queue.Publish(ctx, nats.SubjectQuizRequest, payload); err != nil {
-			return fmt.Errorf("publish quiz request %s: %w", diff, err)
-		}
 	}
 
 	return nil
