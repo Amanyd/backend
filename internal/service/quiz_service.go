@@ -17,10 +17,11 @@ type QuizService struct {
 	courses port.CourseRepository
 	queue   port.MessageQueue
 	cache   port.Cache
+	rag     port.RagClient
 }
 
-func NewQuizService(quizzes port.QuizRepository, courses port.CourseRepository, queue port.MessageQueue, cache port.Cache) *QuizService {
-	return &QuizService{quizzes: quizzes, courses: courses, queue: queue, cache: cache}
+func NewQuizService(quizzes port.QuizRepository, courses port.CourseRepository, queue port.MessageQueue, cache port.Cache, rag port.RagClient) *QuizService {
+	return &QuizService{quizzes: quizzes, courses: courses, queue: queue, cache: cache, rag: rag}
 }
 
 func (s *QuizService) ListByCourse(ctx context.Context, courseID uuid.UUID) ([]domain.Quiz, error) {
@@ -97,7 +98,21 @@ func (s *QuizService) SubmitAnswer(ctx context.Context, attemptID, questionID uu
 		return nil, err
 	}
 
-	isCorrect := userAnswer == question.Answer
+	var isCorrect bool
+	if question.Type == domain.QuestionOpenEnded {
+		grade, gradeErr := s.rag.GradeAnswer(ctx, port.GradeRequest{
+			Question:        question.Question,
+			ReferenceAnswer: question.Answer,
+			UserAnswer:      userAnswer,
+		})
+		if gradeErr != nil {
+			isCorrect = false
+		} else {
+			isCorrect = grade.IsCorrect
+		}
+	} else {
+		isCorrect = userAnswer == question.Answer
+	}
 
 	answer := &domain.Answer{
 		AttemptID:  attemptID,
@@ -135,7 +150,7 @@ func (s *QuizService) FinishAttempt(ctx context.Context, attemptID uuid.UUID) (*
 		score = float64(correct) / float64(total) * 100
 	}
 
-	now := attempt.StartedAt
+	now := time.Now()
 	attempt.Score = score
 	attempt.Total = total
 	attempt.EndedAt = &now
