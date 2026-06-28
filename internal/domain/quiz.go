@@ -49,7 +49,7 @@ type Question struct {
 	QuizID   uuid.UUID    `json:"quiz_id"`
 	Type     QuestionType `json:"type"`
 	Question string       `json:"question"`
-	Choices  []Choice      `json:"choices,omitempty"`
+	Choices  []Choice      `json:"choices"`
 	Answer   string       `json:"answer"`
 	OrderIdx int          `json:"order_idx"`
 }

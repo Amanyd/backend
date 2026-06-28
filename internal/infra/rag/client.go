@@ -53,6 +53,42 @@ func (c *ragClient) Chat(ctx context.Context, req port.ChatRequest) (*port.ChatR
 	return &resp, nil
 }
 
+func (c *ragClient) GradeAnswer(ctx context.Context, req port.GradeRequest) (*port.GradeResponse, error) {
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("rag marshal grade request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.baseURL+"/api/v1/quiz/grade",
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("rag new grade request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("X-Internal-Token", c.token)
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("rag grade http do: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("rag grade unexpected status: %d", resp.StatusCode)
+	}
+
+	var gradeResp port.GradeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&gradeResp); err != nil {
+		return nil, fmt.Errorf("rag decode grade response: %w", err)
+	}
+	return &gradeResp, nil
+}
+
 func (c *ragClient) doRequest(ctx context.Context, req port.ChatRequest, stream bool) (io.ReadCloser, error) {
 	payload, err := json.Marshal(req)
 	if err != nil {
