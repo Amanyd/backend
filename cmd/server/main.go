@@ -89,6 +89,7 @@ func main() {
 		Files:   fileRepo,
 		Lessons: lessonRepo,
 		Courses: courseRepo,
+		Users:   userRepo,
 		Queue:   queue,
 		Bucket:  cfg.MinIO.MinIOBucket,
 	}, log)

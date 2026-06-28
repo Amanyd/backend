@@ -23,6 +23,7 @@ type TUSDeps struct {
 	Files   port.FileRepository
 	Lessons port.LessonRepository
 	Courses port.CourseRepository
+	Users   port.UserRepository
 	Queue   port.MessageQueue
 	Bucket  string
 }
@@ -112,6 +113,10 @@ func handleUploadComplete(ctx context.Context, event handler.HookEvent, deps TUS
 	if course.InstructorID != instructorID {
 		return fmt.Errorf("instructor %s does not own course %s", instructorID, course.ID)
 	}
+	instructor, err := deps.Users.GetByID(ctx, instructorID)
+	if err != nil {
+		return fmt.Errorf("get instructor: %w", err)
+	}
 
 	// The S3 store generates IDs in the format "objectKey+multipartUploadID".
 	// We only need the objectKey portion to reference the object in MinIO.
@@ -132,12 +137,14 @@ func handleUploadComplete(ctx context.Context, event handler.HookEvent, deps TUS
 	}
 
 	payload, err := json.Marshal(map[string]string{
-		"bucket":     deps.Bucket,
-		"key":        minioKey,
-		"course_id":  course.ID.String(),
-		"file_id":    file.ID.String(),
-		"file_name":  fileName,
-		"teacher_id": instructorID.String(),
+		"bucket":       deps.Bucket,
+		"key":          minioKey,
+		"course_id":    course.ID.String(),
+		"course_name":  course.Title,
+		"file_id":      file.ID.String(),
+		"file_name":    fileName,
+		"teacher_id":   instructorID.String(),
+		"teacher_name": instructor.Name,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal ingest payload: %w", err)
