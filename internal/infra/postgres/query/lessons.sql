@@ -13,5 +13,9 @@ ORDER BY order_idx ASC;
 UPDATE lessons SET title = $2, order_idx = $3, updated_at = now()
 WHERE id = $1 RETURNING *;
 
+-- name: UpdateLessonKeywords :one
+UPDATE lessons SET keywords = $2, updated_at = now()
+WHERE id = $1 RETURNING *;
+
 -- name: DeleteLesson :exec
 DELETE FROM lessons WHERE id = $1;

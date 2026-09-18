@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 )
@@ -16,6 +17,7 @@ func CreateOrUpdateConsumer(
 		Durable:       durable,
 		FilterSubject: filterSubject,
 		AckPolicy:     jetstream.AckExplicitPolicy,
+		AckWait:       10 * time.Minute,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("consumer %s on %s: %w", durable, stream, err)

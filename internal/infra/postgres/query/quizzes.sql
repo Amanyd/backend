@@ -1,16 +1,19 @@
 -- name: CreateQuiz :one
-INSERT INTO quizzes (course_id, difficulty, status)
-VALUES ($1, $2, $3)
+INSERT INTO quizzes (course_id, lesson_id, difficulty, status)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: GetQuizByID :one
 SELECT * FROM quizzes WHERE id = $1;
 
 -- name: GetQuizByCourseAndDifficulty :one
-SELECT * FROM quizzes WHERE course_id = $1 AND difficulty = $2;
+SELECT * FROM quizzes WHERE course_id = $1 AND difficulty = $2 AND lesson_id IS NULL;
+
+-- name: GetQuizByLessonAndDifficulty :one
+SELECT * FROM quizzes WHERE lesson_id = $1 AND difficulty = $2;
 
 -- name: ListQuizzesByCourse :many
-SELECT * FROM quizzes WHERE course_id = $1 ORDER BY difficulty ASC;
+SELECT * FROM quizzes WHERE course_id = $1 ORDER BY lesson_id ASC, difficulty ASC;
 
 -- name: UpdateQuizStatus :exec
 UPDATE quizzes SET status = $2, updated_at = now() WHERE id = $1;

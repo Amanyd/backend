@@ -25,8 +25,13 @@ func NewQuizRepo(pool *pgxpool.Pool) port.QuizRepository {
 // Quizzes
 
 func (r *quizRepo) CreateQuiz(ctx context.Context, quiz *domain.Quiz) error {
+	var lessonID pgtype.UUID
+	if quiz.LessonID != nil {
+		lessonID = pgtype.UUID{Bytes: *quiz.LessonID, Valid: true}
+	}
 	row, err := r.q.CreateQuiz(ctx, gen.CreateQuizParams{
 		CourseID:   quiz.CourseID,
+		LessonID:   lessonID,
 		Difficulty: string(quiz.Difficulty),
 		Status:     string(quiz.Status),
 	})
@@ -63,6 +68,20 @@ func (r *quizRepo) GetQuizByCourseAndDifficulty(ctx context.Context, courseID uu
 	return toDomainQuiz(row), nil
 }
 
+func (r *quizRepo) GetQuizByLessonAndDifficulty(ctx context.Context, lessonID uuid.UUID, difficulty domain.Difficulty) (*domain.Quiz, error) {
+	row, err := r.q.GetQuizByLessonAndDifficulty(ctx, gen.GetQuizByLessonAndDifficultyParams{
+		LessonID:   pgtype.UUID{Bytes: lessonID, Valid: true},
+		Difficulty: string(difficulty),
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return toDomainQuiz(row), nil
+}
+
 func (r *quizRepo) ListQuizzesByCourse(ctx context.Context, courseID uuid.UUID) ([]domain.Quiz, error) {
 	rows, err := r.q.ListQuizzesByCourse(ctx, courseID)
 	if err != nil {
@@ -87,7 +106,7 @@ func (r *quizRepo) DeleteQuizzesByCourse(ctx context.Context, courseID uuid.UUID
 }
 
 func toDomainQuiz(q gen.Quiz) *domain.Quiz {
-	return &domain.Quiz{
+	quiz := &domain.Quiz{
 		ID:         q.ID,
 		CourseID:   q.CourseID,
 		Difficulty: domain.Difficulty(q.Difficulty),
@@ -95,6 +114,11 @@ func toDomainQuiz(q gen.Quiz) *domain.Quiz {
 		CreatedAt:  q.CreatedAt,
 		UpdatedAt:  q.UpdatedAt,
 	}
+	if q.LessonID.Valid {
+		id := uuid.UUID(q.LessonID.Bytes)
+		quiz.LessonID = &id
+	}
+	return quiz
 }
 
 // Questions

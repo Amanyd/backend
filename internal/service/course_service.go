@@ -17,12 +17,13 @@ type CourseService struct {
 	courses port.CourseRepository
 	lessons port.LessonRepository
 	quizzes port.QuizRepository
+	files   port.FileRepository
 	queue   port.MessageQueue
 	cache   port.Cache
 }
 
-func NewCourseService(courses port.CourseRepository, lessons port.LessonRepository, quizzes port.QuizRepository, queue port.MessageQueue, cache port.Cache) *CourseService {
-	return &CourseService{courses: courses, lessons: lessons, quizzes: quizzes, queue: queue, cache: cache}
+func NewCourseService(courses port.CourseRepository, lessons port.LessonRepository, quizzes port.QuizRepository, files port.FileRepository, queue port.MessageQueue, cache port.Cache) *CourseService {
+	return &CourseService{courses: courses, lessons: lessons, quizzes: quizzes, files: files, queue: queue, cache: cache}
 }
 
 func (s *CourseService) Create(ctx context.Context, title, desc, rank string, instructorID uuid.UUID) (*domain.Course, error) {
@@ -179,27 +180,54 @@ func (s *CourseService) Finalize(ctx context.Context, courseID, instructorID uui
 		return fmt.Errorf("delete quizzes: %w", err)
 	}
 
-	for _, diff := range []domain.Difficulty{domain.DifficultyEasy, domain.DifficultyMedium, domain.DifficultyHard} {
+	lessons, err := s.lessons.ListByCourse(ctx, courseID)
+	if err != nil {
+		return fmt.Errorf("list lessons: %w", err)
+	}
+	if len(lessons) == 0 {
+		return fmt.Errorf("course must have at least one lesson to be published")
+	}
+
+	for _, lesson := range lessons {
+		lessonID := lesson.ID // capture loop var
+		
+		files, err := s.files.ListByLesson(ctx, lessonID)
+		if err != nil {
+			return fmt.Errorf("list files for lesson %s: %w", lessonID, err)
+		}
+		
+		var fileID string
+		for _, f := range files {
+			if f.Status == domain.IngestReady {
+				fileID = f.ID.String()
+				break
+			}
+		}
+
 		quiz := &domain.Quiz{
 			CourseID:   courseID,
-			Difficulty: diff,
+			LessonID:   &lessonID,
+			Difficulty: domain.DifficultyMedium,
 			Status:     domain.QuizGenerating,
 		}
 		if err := s.quizzes.CreateQuiz(ctx, quiz); err != nil {
-			return fmt.Errorf("create quiz %s: %w", diff, err)
+			return fmt.Errorf("create lesson quiz %s: %w", lesson.ID, err)
 		}
 
 		payload, err := json.Marshal(map[string]any{
+			"type":         "lesson",
 			"course_id":    courseID.String(),
-			"difficulty":   string(diff),
+			"lesson_id":    lesson.ID.String(),
+			"file_id":      fileID,
+			"difficulty":   string(domain.DifficultyMedium),
 			"limit_chunks": 20,
 		})
 		if err != nil {
-			return fmt.Errorf("marshal quiz request: %w", err)
+			return fmt.Errorf("marshal lesson quiz request: %w", err)
 		}
 
 		if err := s.queue.Publish(ctx, nats.SubjectQuizRequest, payload); err != nil {
-			return fmt.Errorf("publish quiz request %s: %w", diff, err)
+			return fmt.Errorf("publish lesson quiz request %s: %w", lesson.ID, err)
 		}
 	}
 

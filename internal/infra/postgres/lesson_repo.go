@@ -71,6 +71,14 @@ func (r *lessonRepo) Update(ctx context.Context, l *domain.Lesson) error {
 	return nil
 }
 
+func (r *lessonRepo) UpdateKeywords(ctx context.Context, id uuid.UUID, keywords []byte) error {
+	_, err := r.q.UpdateLessonKeywords(ctx, gen.UpdateLessonKeywordsParams{
+		ID:       id,
+		Keywords: keywords,
+	})
+	return err
+}
+
 func (r *lessonRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.q.DeleteLesson(ctx, id)
 }
@@ -81,6 +89,7 @@ func toDomainLesson(l gen.Lesson) *domain.Lesson {
 		CourseID:  l.CourseID,
 		Title:     l.Title,
 		OrderIdx:  int(l.OrderIdx),
+		Keywords:  l.Keywords,
 		CreatedAt: l.CreatedAt,
 		UpdatedAt: l.UpdatedAt,
 	}

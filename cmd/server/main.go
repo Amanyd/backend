@@ -99,7 +99,7 @@ func main() {
 
 	// Services
 	userSvc := service.NewUserService(userRepo, cfg.JWT)
-	courseSvc := service.NewCourseService(courseRepo, lessonRepo, quizRepo, queue, cache)
+	courseSvc := service.NewCourseService(courseRepo, lessonRepo, quizRepo, fileRepo, queue, cache)
 	fileSvc := service.NewFileService(fileRepo, storage, cache)
 	chatSvc := service.NewChatService(chatRepo, courseRepo, userRepo, ragClient)
 	quizSvc := service.NewQuizService(quizRepo, courseRepo, queue, cache, ragClient)
@@ -133,6 +133,8 @@ func main() {
 	go func() {
 		if err := worker.StartQuizDoneWorker(workerCtx, js, worker.QuizDoneWorkerDeps{
 			Quizzes: quizRepo,
+			Lessons: lessonRepo,
+			Queue:   queue,
 		}, log); err != nil {
 			log.Error("quiz_done_worker stopped", zap.Error(err))
 		}

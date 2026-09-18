@@ -12,5 +12,6 @@ type LessonRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Lesson, error)
 	ListByCourse(ctx context.Context, courseID uuid.UUID) ([]domain.Lesson, error)
 	Update(ctx context.Context, lesson *domain.Lesson) error
+	UpdateKeywords(ctx context.Context, id uuid.UUID, keywords []byte) error
 	Delete(ctx context.Context, id uuid.UUID) error
 }
