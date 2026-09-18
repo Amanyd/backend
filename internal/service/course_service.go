@@ -197,10 +197,20 @@ func (s *CourseService) Finalize(ctx context.Context, courseID, instructorID uui
 		}
 		
 		var fileID string
+		// Prefer DOCX files (lesson plans) over PDFs (textbooks)
 		for _, f := range files {
-			if f.IngestStatus == domain.IngestReady {
+			if f.IngestStatus == domain.IngestReady && f.FileType == domain.FileTypeDOCX {
 				fileID = f.ID.String()
 				break
+			}
+		}
+		// Fallback to any ready file
+		if fileID == "" {
+			for _, f := range files {
+				if f.IngestStatus == domain.IngestReady {
+					fileID = f.ID.String()
+					break
+				}
 			}
 		}
 
