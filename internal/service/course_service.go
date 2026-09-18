@@ -198,7 +198,7 @@ func (s *CourseService) Finalize(ctx context.Context, courseID, instructorID uui
 		
 		var fileID string
 		for _, f := range files {
-			if f.Status == domain.IngestReady {
+			if f.IngestStatus == domain.IngestReady {
 				fileID = f.ID.String()
 				break
 			}
