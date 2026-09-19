@@ -216,7 +216,7 @@ func handleQuizDone(ctx context.Context, msg jetstream.Msg, deps QuizDoneWorkerD
 					"course_id":    courseID.String(),
 					"difficulty":   string(diff),
 					"keywords":     allKeywords,
-					"limit_chunks": 50,
+					"limit_chunks": 20,
 				})
 				if err != nil {
 					log.Error("Failed to marshal course quiz request", zap.Error(err))
