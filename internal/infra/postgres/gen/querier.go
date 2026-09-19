@@ -30,8 +30,11 @@ type Querier interface {
 	GetChatSessionByID(ctx context.Context, id uuid.UUID) (ChatSession, error)
 	GetCourseByID(ctx context.Context, id uuid.UUID) (Course, error)
 	GetCourseMetrics(ctx context.Context, dollar_1 uuid.UUID) (GetCourseMetricsRow, error)
+	GetCourseProgress(ctx context.Context, arg GetCourseProgressParams) ([]UserCourseProgress, error)
 	GetFileByID(ctx context.Context, id uuid.UUID) (File, error)
+	GetFileProgress(ctx context.Context, arg GetFileProgressParams) ([]GetFileProgressRow, error)
 	GetLessonByID(ctx context.Context, id uuid.UUID) (Lesson, error)
+	GetLessonProgress(ctx context.Context, arg GetLessonProgressParams) ([]UserLessonProgress, error)
 	GetOverview(ctx context.Context, instructorID uuid.UUID) (GetOverviewRow, error)
 	GetQuestionByID(ctx context.Context, id uuid.UUID) (Question, error)
 	GetQuizByCourseAndDifficulty(ctx context.Context, arg GetQuizByCourseAndDifficultyParams) (Quiz, error)
@@ -57,6 +60,9 @@ type Querier interface {
 	UpdateLesson(ctx context.Context, arg UpdateLessonParams) (Lesson, error)
 	UpdateLessonKeywords(ctx context.Context, arg UpdateLessonKeywordsParams) (Lesson, error)
 	UpdateQuizStatus(ctx context.Context, arg UpdateQuizStatusParams) error
+	UpsertCourseProgress(ctx context.Context, arg UpsertCourseProgressParams) (UserCourseProgress, error)
+	UpsertFileProgress(ctx context.Context, arg UpsertFileProgressParams) (UserFileProgress, error)
+	UpsertLessonProgress(ctx context.Context, arg UpsertLessonProgressParams) (UserLessonProgress, error)
 }
 
 var _ Querier = (*Queries)(nil)

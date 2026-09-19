@@ -14,6 +14,7 @@ import (
 	minioinfra "github.com/Amanyd/backend/internal/infra/minio"
 	natsinfra "github.com/Amanyd/backend/internal/infra/nats"
 	"github.com/Amanyd/backend/internal/infra/postgres"
+	"github.com/Amanyd/backend/internal/infra/postgres/gen"
 	"github.com/Amanyd/backend/internal/infra/postgres/migrations"
 	raginfra "github.com/Amanyd/backend/internal/infra/rag"
 	redisinfra "github.com/Amanyd/backend/internal/infra/redis"
@@ -76,6 +77,7 @@ func main() {
 	quizRepo := postgres.NewQuizRepo(pool)
 	chatRepo := postgres.NewChatRepo(pool)
 	analyticsRepo := postgres.NewAnalyticsRepo(pool)
+	progressRepo := postgres.NewProgressRepo(gen.New(pool))
 
 	// Infra adapters
 	storage := minioinfra.NewStorage(minioClient, cfg.MinIO.MinIOBucket)
@@ -104,6 +106,7 @@ func main() {
 	chatSvc := service.NewChatService(chatRepo, courseRepo, userRepo, ragClient)
 	quizSvc := service.NewQuizService(quizRepo, courseRepo, queue, cache, ragClient)
 	analyticsSvc := service.NewAnalyticsService(analyticsRepo)
+	progressSvc := service.NewProgressService(progressRepo)
 
 	// Handlers
 	userH := handler.NewUserHandler(userSvc)
@@ -114,8 +117,9 @@ func main() {
 	chatH := handler.NewChatHandler(chatSvc)
 	analytH := handler.NewAnalyticsHandler(analyticsSvc)
 	healthH := handler.NewHealthHandler()
+	progressH := handler.NewProgressHandler(progressSvc)
 
-	router := handler.NewRouter(userH, courseH, lessonH, fileH, quizH, chatH, analytH, healthH, tusH, rateLimiter, cfg, log)
+	router := handler.NewRouter(userH, courseH, lessonH, fileH, quizH, progressH, chatH, analytH, healthH, tusH, rateLimiter, cfg, log)
 
 	// Workers
 	workerCtx, workerCancel := context.WithCancel(ctx)

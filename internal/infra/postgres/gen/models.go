@@ -118,3 +118,26 @@ type User struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
+
+type UserCourseProgress struct {
+	ID          uuid.UUID          `json:"id"`
+	UserID      uuid.UUID          `json:"user_id"`
+	CourseID    uuid.UUID          `json:"course_id"`
+	IsCompleted bool               `json:"is_completed"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
+}
+
+type UserFileProgress struct {
+	ID       uuid.UUID `json:"id"`
+	UserID   uuid.UUID `json:"user_id"`
+	FileID   uuid.UUID `json:"file_id"`
+	IsViewed bool      `json:"is_viewed"`
+}
+
+type UserLessonProgress struct {
+	ID          uuid.UUID          `json:"id"`
+	UserID      uuid.UUID          `json:"user_id"`
+	LessonID    uuid.UUID          `json:"lesson_id"`
+	IsCompleted bool               `json:"is_completed"`
+	CompletedAt pgtype.Timestamptz `json:"completed_at"`
+}

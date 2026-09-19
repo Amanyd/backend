@@ -190,6 +190,8 @@ func (s *CourseService) Finalize(ctx context.Context, courseID, instructorID uui
 		return fmt.Errorf("course must have at least one lesson to be published")
 	}
 
+	lessonQuizzesQueued := 0
+
 	for _, lesson := range lessons {
 		lessonID := lesson.ID // capture loop var
 		
@@ -199,21 +201,17 @@ func (s *CourseService) Finalize(ctx context.Context, courseID, instructorID uui
 		}
 		
 		var fileID string
-		// Prefer DOCX files (lesson plans) over PDFs (textbooks)
+		// Strictly prefer DOCX files (lesson plans) for keyword extraction
 		for _, f := range files {
 			if f.IngestStatus == domain.IngestReady && f.FileType == domain.FileTypeDOCX {
 				fileID = f.ID.String()
 				break
 			}
 		}
-		// Fallback to any ready file
+		
+		// If there is no DOCX file, we cannot extract keywords, so we skip the lesson quiz entirely.
 		if fileID == "" {
-			for _, f := range files {
-				if f.IngestStatus == domain.IngestReady {
-					fileID = f.ID.String()
-					break
-				}
-			}
+			continue
 		}
 
 		quiz := &domain.Quiz{
@@ -240,6 +238,33 @@ func (s *CourseService) Finalize(ctx context.Context, courseID, instructorID uui
 
 		if err := s.queue.Publish(ctx, nats.SubjectQuizRequest, payload); err != nil {
 			return fmt.Errorf("publish lesson quiz request %s: %w", lesson.ID, err)
+		}
+		lessonQuizzesQueued++
+	}
+
+	// If no lesson quizzes were queued (because no lesson had a DOCX file),
+	// trigger the course quizzes immediately.
+	if lessonQuizzesQueued == 0 {
+		for _, diff := range []domain.Difficulty{domain.DifficultyEasy, domain.DifficultyMedium, domain.DifficultyHard} {
+			q := &domain.Quiz{
+				CourseID:   courseID,
+				Difficulty: diff,
+				Status:     domain.QuizGenerating,
+			}
+			if err := s.quizzes.CreateQuiz(ctx, q); err != nil {
+				continue
+			}
+
+			payload, err := json.Marshal(map[string]any{
+				"type":         "course",
+				"course_id":    courseID.String(),
+				"difficulty":   string(diff),
+				"keywords":     []string{},
+				"limit_chunks": 20,
+			})
+			if err == nil {
+				_ = s.queue.Publish(ctx, nats.SubjectQuizRequest, payload)
+			}
 		}
 	}
 

@@ -20,6 +20,7 @@ func NewRouter(
 	lessonH *LessonHandler,
 	fileH *FileHandler,
 	quizH *QuizHandler,
+	progressH *ProgressHandler,
 	chatH *ChatHandler,
 	analytH *AnalyticsHandler,
 	healthH *HealthHandler,
@@ -64,6 +65,10 @@ func NewRouter(
 		r.Get("/api/v1/files/{fileId}/view", fileH.ViewURL)
 
 		r.Get("/api/v1/courses/{courseId}/quizzes", quizH.ListByCourse)
+		r.Get("/api/v1/courses/{courseId}/progress", progressH.GetCourseProgress)
+		r.Post("/api/v1/progress/file/{fileId}", progressH.MarkFileViewed)
+		r.Post("/api/v1/progress/lesson/{lessonId}", progressH.MarkLessonComplete)
+		r.Post("/api/v1/progress/course/{courseId}", progressH.MarkCourseComplete)
 		r.Get("/api/v1/quizzes/{quizId}", quizH.Get)
 		r.Post("/api/v1/quizzes/{quizId}/attempt", quizH.StartAttempt)
 		r.Post("/api/v1/attempts/{attemptId}/answer", quizH.SubmitAnswer)
