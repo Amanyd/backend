@@ -269,7 +269,7 @@ func (s *CourseService) Delete(ctx context.Context, courseID, instructorID uuid.
 		for _, lesson := range lessons {
 			if files, err := s.files.ListByLesson(ctx, lesson.ID); err == nil {
 				for _, f := range files {
-					if err := s.storage.DeleteObject(ctx, f.MinioKey); err != nil {
+					if err := s.storage.Delete(ctx, f.MinioKey); err != nil {
 						fmt.Printf("warning: failed to delete file %s from minio: %v\n", f.MinioKey, err)
 					}
 				}
