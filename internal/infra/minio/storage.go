@@ -3,6 +3,7 @@ package minio
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/Amanyd/backend/internal/port"
@@ -27,7 +28,9 @@ func (s *storage) PresignUpload(ctx context.Context, key string, expiry time.Dur
 }
 
 func (s *storage) PresignView(ctx context.Context, key string, expiry time.Duration) (string, error) {
-	u, err := s.client.PresignedGetObject(ctx, s.bucket, key, expiry, nil)
+	reqParams := make(url.Values)
+	reqParams.Set("response-content-disposition", "inline")
+	u, err := s.client.PresignedGetObject(ctx, s.bucket, key, expiry, reqParams)
 	if err != nil {
 		return "", fmt.Errorf("minio presign view: %w", err)
 	}
