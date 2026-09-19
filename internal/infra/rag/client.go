@@ -89,6 +89,31 @@ func (c *ragClient) GradeAnswer(ctx context.Context, req port.GradeRequest) (*po
 	return &gradeResp, nil
 }
 
+func (c *ragClient) DeleteCourse(ctx context.Context, courseID string) error {
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodDelete,
+		c.baseURL+"/api/v1/course/"+courseID,
+		nil,
+	)
+	if err != nil {
+		return fmt.Errorf("rag new delete request: %w", err)
+	}
+
+	httpReq.Header.Set("X-Internal-Token", c.token)
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("rag delete http do: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("rag delete unexpected status: %d", resp.StatusCode)
+	}
+	return nil
+}
+
 func (c *ragClient) doRequest(ctx context.Context, req port.ChatRequest, stream bool) (io.ReadCloser, error) {
 	payload, err := json.Marshal(req)
 	if err != nil {

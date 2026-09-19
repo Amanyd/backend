@@ -14,16 +14,18 @@ import (
 )
 
 type CourseService struct {
-	courses port.CourseRepository
-	lessons port.LessonRepository
-	quizzes port.QuizRepository
-	files   port.FileRepository
-	queue   port.MessageQueue
-	cache   port.Cache
+	courses   port.CourseRepository
+	lessons   port.LessonRepository
+	quizzes   port.QuizRepository
+	files     port.FileRepository
+	queue     port.MessageQueue
+	cache     port.Cache
+	storage   port.ObjectStorage
+	ragClient port.RagClient
 }
 
-func NewCourseService(courses port.CourseRepository, lessons port.LessonRepository, quizzes port.QuizRepository, files port.FileRepository, queue port.MessageQueue, cache port.Cache) *CourseService {
-	return &CourseService{courses: courses, lessons: lessons, quizzes: quizzes, files: files, queue: queue, cache: cache}
+func NewCourseService(courses port.CourseRepository, lessons port.LessonRepository, quizzes port.QuizRepository, files port.FileRepository, queue port.MessageQueue, cache port.Cache, storage port.ObjectStorage, ragClient port.RagClient) *CourseService {
+	return &CourseService{courses: courses, lessons: lessons, quizzes: quizzes, files: files, queue: queue, cache: cache, storage: storage, ragClient: ragClient}
 }
 
 func (s *CourseService) Create(ctx context.Context, title, desc, rank string, instructorID uuid.UUID) (*domain.Course, error) {
@@ -256,6 +258,26 @@ func (s *CourseService) Delete(ctx context.Context, courseID, instructorID uuid.
 	if course.InstructorID != instructorID {
 		return domain.ErrForbidden
 	}
+
+	// 1. Delete Qdrant vectors
+	if err := s.ragClient.DeleteCourse(ctx, courseID.String()); err != nil {
+		fmt.Printf("warning: failed to delete course from rag: %v\n", err)
+	}
+
+	// 2. Delete Minio files
+	if lessons, err := s.lessons.ListByCourse(ctx, courseID); err == nil {
+		for _, lesson := range lessons {
+			if files, err := s.files.ListByLesson(ctx, lesson.ID); err == nil {
+				for _, f := range files {
+					if err := s.storage.DeleteObject(ctx, f.MinioKey); err != nil {
+						fmt.Printf("warning: failed to delete file %s from minio: %v\n", f.MinioKey, err)
+					}
+				}
+			}
+		}
+	}
+
+	// 3. Delete from Postgres (cascades)
 	if err := s.courses.Delete(ctx, courseID); err != nil {
 		return err
 	}

@@ -9,6 +9,7 @@ type RagClient interface {
 	ChatStream(ctx context.Context, req ChatRequest) (io.ReadCloser, error)
 	Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error)
 	GradeAnswer(ctx context.Context, req GradeRequest) (*GradeResponse, error)
+	DeleteCourse(ctx context.Context, courseID string) error
 }
 
 type ChatRequest struct {
