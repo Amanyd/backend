@@ -139,6 +139,7 @@ func main() {
 			Quizzes: quizRepo,
 			Lessons: lessonRepo,
 			Queue:   queue,
+			Cache:   cache,
 		}, log); err != nil {
 			log.Error("quiz_done_worker stopped", zap.Error(err))
 		}

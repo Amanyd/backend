@@ -18,6 +18,7 @@ type QuizDoneWorkerDeps struct {
 	Quizzes port.QuizRepository
 	Lessons port.LessonRepository
 	Queue   port.MessageQueue
+	Cache   port.Cache
 }
 
 func StartQuizDoneWorker(ctx context.Context, js jetstream.JetStream, deps QuizDoneWorkerDeps, log *zap.Logger) error {
@@ -121,6 +122,10 @@ func handleQuizDone(ctx context.Context, msg jetstream.Msg, deps QuizDoneWorkerD
 
 	if payload.Status != "success" {
 		log.Info("quiz_done failed", zap.String("course_id", payload.CourseID), zap.String("type", payload.Type))
+		if deps.Cache != nil {
+			_ = deps.Cache.Delete(ctx, "quizzes:course:"+courseID.String())
+			_ = deps.Cache.Delete(ctx, "quiz:"+quiz.ID.String())
+		}
 		return deps.Quizzes.UpdateQuizStatus(ctx, quiz.ID, domain.QuizFailed)
 	}
 
@@ -161,6 +166,11 @@ func handleQuizDone(ctx context.Context, msg jetstream.Msg, deps QuizDoneWorkerD
 		return fmt.Errorf("update quiz status: %w", err)
 	}
 
+	if deps.Cache != nil {
+		_ = deps.Cache.Delete(ctx, "quizzes:course:"+courseID.String())
+		_ = deps.Cache.Delete(ctx, "quiz:"+quiz.ID.String())
+	}
+
 	if payload.Type == "lesson" {
 		// Saga Trigger: Check if all lesson quizzes for this course are ready.
 		allQuizzes, err := deps.Quizzes.ListQuizzesByCourse(ctx, courseID)
@@ -170,17 +180,20 @@ func handleQuizDone(ctx context.Context, msg jetstream.Msg, deps QuizDoneWorkerD
 
 		allReady := true
 		hasLessons := false
+		hasCourseQuizzes := false
 		for _, q := range allQuizzes {
 			if q.LessonID != nil {
 				hasLessons = true
 				if q.Status != domain.QuizReady {
 					allReady = false
-					break
 				}
+			} else {
+				hasCourseQuizzes = true
 			}
 		}
 
-		if hasLessons && allReady {
+		// Only trigger course quizzes if all lesson quizzes are ready AND course quizzes don't already exist
+		if hasLessons && allReady && !hasCourseQuizzes {
 			log.Info("All lesson quizzes ready. Triggering course quizzes.", zap.String("course_id", courseID.String()))
 			
 			// Fetch all lessons for the course to get their keywords

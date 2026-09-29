@@ -26,7 +26,7 @@ const (
 type Quiz struct {
 	ID         uuid.UUID  `json:"id"`
 	CourseID   uuid.UUID  `json:"course_id"`
-	LessonID   *uuid.UUID `json:"lesson_id,omitempty"`
+	LessonID   *uuid.UUID `json:"lesson_id"`
 	Difficulty Difficulty `json:"difficulty"`
 	Status     QuizStatus `json:"status"`
 	CreatedAt  time.Time  `json:"created_at"`
