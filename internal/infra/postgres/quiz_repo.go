@@ -110,7 +110,7 @@ func (r *quizRepo) ListQuizzesByCourseWithAttempts(ctx context.Context, courseID
 	}
 	defer rows.Close()
 
-	var quizzes []domain.Quiz
+	quizzes := make([]domain.Quiz, 0)
 	for rows.Next() {
 		var q domain.Quiz
 		var lessonID pgtype.UUID

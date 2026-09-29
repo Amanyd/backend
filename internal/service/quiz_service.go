@@ -30,6 +30,9 @@ func (s *QuizService) ListByCourse(ctx context.Context, courseID uuid.UUID) ([]d
 	if cached, err := s.cache.Get(ctx, key); err == nil {
 		var quizzes []domain.Quiz
 		if json.Unmarshal([]byte(cached), &quizzes) == nil {
+			if quizzes == nil {
+				quizzes = make([]domain.Quiz, 0)
+			}
 			return quizzes, nil
 		}
 	}

@@ -33,6 +33,7 @@ func NewRouter(
 
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(middleware.CleanPath)
 	r.Use(RequestLogger(log))
 	r.Use(middleware.Recoverer)
 
@@ -45,12 +46,16 @@ func NewRouter(
 		MaxAge:           300,
 	}))
 
-	r.Get("/health", healthH.Health)
-	r.Post("/api/v1/auth/register", userH.Register)
-	r.Post("/api/v1/auth/login", userH.Login)
-	r.Post("/api/v1/auth/refresh", userH.RefreshToken)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.StripSlashes)
+		r.Get("/health", healthH.Health)
+		r.Post("/api/v1/auth/register", userH.Register)
+		r.Post("/api/v1/auth/login", userH.Login)
+		r.Post("/api/v1/auth/refresh", userH.RefreshToken)
+	})
 
 	r.Group(func(r chi.Router) {
+		r.Use(middleware.StripSlashes)
 		r.Use(JWTAuthMiddleware(cfg.JWT.JWTAccessSecret))
 		r.Use(RateLimitMiddleware(rl, 60, 10))
 		r.Use(middleware.Timeout(30 * time.Second))
@@ -107,6 +112,7 @@ func NewRouter(
 	// client connection; cancellation is handled naturally when the client
 	// disconnects or the stream ends.
 	r.Group(func(r chi.Router) {
+		r.Use(middleware.StripSlashes)
 		r.Use(JWTAuthMiddleware(cfg.JWT.JWTAccessSecret))
 		r.Use(RateLimitMiddleware(rl, 60, 10))
 		r.Post("/api/v1/chat/sessions/{sessionId}/message", chatH.SendMessage)

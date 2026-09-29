@@ -146,7 +146,7 @@ func toDomainSession(s gen.ChatSession) *domain.ChatSession {
 }
 
 func toDomainMessage(m gen.ChatMessage) (*domain.Message, error) {
-	var citations []domain.Citation
+	citations := make([]domain.Citation, 0)
 	if len(m.Citations) > 0 {
 		if err := json.Unmarshal(m.Citations, &citations); err != nil {
 			return nil, err
