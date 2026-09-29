@@ -90,6 +90,16 @@ func (s *ChatService) SendMessage(ctx context.Context, sessionID, userID uuid.UU
 	return stream, nil
 }
 
+func (s *ChatService) SaveAssistantMessage(ctx context.Context, sessionID uuid.UUID, content string, citations []domain.Citation) error {
+	assistantMsg := &domain.Message{
+		SessionID: sessionID,
+		Role:      domain.RoleAssistant,
+		Content:   content,
+		Citations: citations,
+	}
+	return s.chats.CreateMessage(ctx, assistantMsg)
+}
+
 func (s *ChatService) GetHistory(ctx context.Context, sessionID uuid.UUID) ([]domain.Message, error) {
 	return s.chats.ListMessages(ctx, sessionID, 100)
 }

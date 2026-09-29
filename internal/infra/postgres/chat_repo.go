@@ -13,11 +13,12 @@ import (
 )
 
 type chatRepo struct {
-	q *gen.Queries
+	pool *pgxpool.Pool
+	q    *gen.Queries
 }
 
 func NewChatRepo(pool *pgxpool.Pool) port.ChatRepository {
-	return &chatRepo{q: gen.New(pool)}
+	return &chatRepo{pool: pool, q: gen.New(pool)}
 }
 
 func (r *chatRepo) CreateSession(ctx context.Context, s *domain.ChatSession) error {
@@ -48,13 +49,39 @@ func (r *chatRepo) GetSessionByID(ctx context.Context, id uuid.UUID) (*domain.Ch
 }
 
 func (r *chatRepo) ListSessionsByUser(ctx context.Context, userID uuid.UUID) ([]domain.ChatSession, error) {
-	rows, err := r.q.ListChatSessionsByUser(ctx, userID)
+	const query = `
+		SELECT 
+			s.id, 
+			s.user_id, 
+			s.course_id, 
+			COALESCE(
+				NULLIF((SELECT content FROM chat_messages WHERE session_id = s.id AND role = 'user' ORDER BY created_at ASC LIMIT 1), ''),
+				s.title
+			) AS title,
+			s.created_at, 
+			s.updated_at
+		FROM chat_sessions s
+		WHERE s.user_id = $1
+		ORDER BY s.updated_at DESC
+	`
+	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
 	}
-	sessions := make([]domain.ChatSession, len(rows))
-	for i, row := range rows {
-		sessions[i] = *toDomainSession(row)
+	defer rows.Close()
+
+	var sessions []domain.ChatSession
+	for rows.Next() {
+		var s domain.ChatSession
+		var courseID *uuid.UUID
+		if err := rows.Scan(&s.ID, &s.UserID, &courseID, &s.Title, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			return nil, err
+		}
+		s.CourseID = courseID
+		sessions = append(sessions, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return sessions, nil
 }
@@ -76,6 +103,10 @@ func (r *chatRepo) CreateMessage(ctx context.Context, m *domain.Message) error {
 	}
 	m.ID = row.ID
 	m.CreatedAt = row.CreatedAt
+
+	// Update session updated_at timestamp so active sessions bubble to top
+	_, _ = r.pool.Exec(ctx, "UPDATE chat_sessions SET updated_at = now() WHERE id = $1", m.SessionID)
+
 	return nil
 }
 

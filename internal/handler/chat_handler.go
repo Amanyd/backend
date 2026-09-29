@@ -2,10 +2,14 @@ package handler
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
+	"github.com/Amanyd/backend/internal/domain"
 	"github.com/Amanyd/backend/internal/service"
 	"github.com/Amanyd/backend/pkg/apierr"
 	"github.com/Amanyd/backend/pkg/validator"
@@ -103,10 +107,38 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	// the first SSE token while the LLM is still generating.
 	flusher.Flush()
 
+	var assistantContent strings.Builder
+	var citations []domain.Citation
+
 	scanner := bufio.NewScanner(stream)
 	for scanner.Scan() {
-		fmt.Fprintf(w, "%s\n", scanner.Text())
+		line := scanner.Text()
+		fmt.Fprintf(w, "%s\n", line)
 		flusher.Flush()
+
+		if strings.HasPrefix(line, "data: ") {
+			payload := strings.TrimSpace(strings.TrimPrefix(line, "data: "))
+			if payload != "[DONE]" && payload != "" {
+				var frame struct {
+					Token     string            `json:"token"`
+					Citations []domain.Citation `json:"citations"`
+				}
+				if err := json.Unmarshal([]byte(payload), &frame); err == nil {
+					if frame.Token != "" {
+						assistantContent.WriteString(frame.Token)
+					}
+					if len(frame.Citations) > 0 {
+						citations = frame.Citations
+					}
+				}
+			}
+		}
+	}
+
+	if assistantContent.Len() > 0 {
+		saveCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = h.svc.SaveAssistantMessage(saveCtx, sessionID, assistantContent.String(), citations)
 	}
 }
 
