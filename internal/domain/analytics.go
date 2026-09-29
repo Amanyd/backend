@@ -67,7 +67,10 @@ type LeaderboardEntry struct {
 	EnrollmentID     string    `json:"enrollment_id"`
 	Rank             string    `json:"rank"`
 	CoursesCompleted int       `json:"courses_completed"`
+	CoursesEnrolled  int       `json:"courses_enrolled"`
+	LessonsCompleted int       `json:"lessons_completed"`
 	AvgScore         float64   `json:"avg_score"`
+	ReadinessScore   float64   `json:"readiness_score"`
 	IsCurrentUser    bool      `json:"is_current_user"`
 }
 

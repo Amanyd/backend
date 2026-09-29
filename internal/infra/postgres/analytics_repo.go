@@ -282,20 +282,60 @@ func (r *analyticsRepo) GetStudentAnalytics(ctx context.Context, userID uuid.UUI
 
 	// 4. Category Leaderboard
 	lbRows, err := r.pool.Query(ctx, `
-		SELECT u.id, u.name, u.enrollment_id, u.rank,
-			COALESCE((SELECT COUNT(*) FROM user_course_progress ucp WHERE ucp.user_id = u.id AND ucp.is_completed = true), 0) AS courses_completed,
-			COALESCE((SELECT AVG(a.score) FROM attempts a WHERE a.user_id = u.id AND a.ended_at IS NOT NULL), 0)::float AS avg_score
+		SELECT
+			u.id,
+			u.name,
+			u.enrollment_id,
+			u.rank,
+			COALESCE(ucp.completed_count, 0) AS courses_completed,
+			COALESCE(ulp.completed_count, 0) AS lessons_completed,
+			COALESCE(att.avg_score, 0)::float AS avg_score,
+			(SELECT COUNT(*) FROM courses WHERE published = true AND (rank = u.rank OR rank = 'officer')) AS courses_enrolled
 		FROM users u
+		LEFT JOIN (
+			SELECT user_id, COUNT(*) AS completed_count
+			FROM user_course_progress
+			WHERE is_completed = true
+			GROUP BY user_id
+		) ucp ON ucp.user_id = u.id
+		LEFT JOIN (
+			SELECT user_id, COUNT(*) AS completed_count
+			FROM user_lesson_progress
+			WHERE is_completed = true
+			GROUP BY user_id
+		) ulp ON ulp.user_id = u.id
+		LEFT JOIN (
+			SELECT user_id, AVG(score) AS avg_score
+			FROM attempts
+			WHERE ended_at IS NOT NULL
+			GROUP BY user_id
+		) att ON att.user_id = u.id
 		WHERE u.rank = $1 AND u.role = 'student'
-		ORDER BY avg_score DESC, courses_completed DESC
-		LIMIT 10
+		ORDER BY avg_score DESC, courses_completed DESC, u.name ASC
 	`, res.UserProfile.Rank)
 	if err == nil {
 		defer lbRows.Close()
 		rankPos := 1
 		for lbRows.Next() {
 			var entry domain.LeaderboardEntry
-			if err := lbRows.Scan(&entry.UserID, &entry.Name, &entry.EnrollmentID, &entry.Rank, &entry.CoursesCompleted, &entry.AvgScore); err == nil {
+			if err := lbRows.Scan(
+				&entry.UserID,
+				&entry.Name,
+				&entry.EnrollmentID,
+				&entry.Rank,
+				&entry.CoursesCompleted,
+				&entry.LessonsCompleted,
+				&entry.AvgScore,
+				&entry.CoursesEnrolled,
+			); err == nil {
+				compPct := 0.0
+				if entry.CoursesEnrolled > 0 {
+					compPct = (float64(entry.CoursesCompleted) / float64(entry.CoursesEnrolled)) * 100.0
+					if compPct > 100.0 {
+						compPct = 100.0
+					}
+				}
+				entry.ReadinessScore = (entry.AvgScore * 0.6) + (compPct * 0.4)
 				entry.RankPosition = rankPos
 				entry.IsCurrentUser = (entry.UserID == userID)
 				res.Leaderboard = append(res.Leaderboard, entry)
