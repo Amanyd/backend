@@ -22,7 +22,8 @@ func (h *QuizHandler) ListByCourse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	quizzes, err := h.svc.ListByCourse(r.Context(), courseID)
+	claims := GetClaims(r)
+	quizzes, err := h.svc.ListByCourseWithUser(r.Context(), courseID, claims.UserID)
 	if err != nil {
 		apierr.WriteJSON(w, mapDomainError(err))
 		return

@@ -15,11 +15,12 @@ import (
 )
 
 type quizRepo struct {
-	q *gen.Queries
+	pool *pgxpool.Pool
+	q    *gen.Queries
 }
 
 func NewQuizRepo(pool *pgxpool.Pool) port.QuizRepository {
-	return &quizRepo{q: gen.New(pool)}
+	return &quizRepo{pool: pool, q: gen.New(pool)}
 }
 
 // Quizzes
@@ -90,6 +91,53 @@ func (r *quizRepo) ListQuizzesByCourse(ctx context.Context, courseID uuid.UUID) 
 	quizzes := make([]domain.Quiz, len(rows))
 	for i, row := range rows {
 		quizzes[i] = *toDomainQuiz(row)
+	}
+	return quizzes, nil
+}
+
+func (r *quizRepo) ListQuizzesByCourseWithAttempts(ctx context.Context, courseID uuid.UUID, userID uuid.UUID) ([]domain.Quiz, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT q.id, q.course_id, q.lesson_id, q.difficulty, q.status, q.created_at, q.updated_at,
+		       (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) AS question_count,
+		       (SELECT a.score FROM attempts a WHERE a.quiz_id = q.id AND a.user_id = $2 AND a.ended_at IS NOT NULL ORDER BY a.ended_at DESC LIMIT 1) AS last_score,
+		       EXISTS (SELECT 1 FROM attempts a WHERE a.quiz_id = q.id AND a.user_id = $2 AND a.ended_at IS NOT NULL) AS is_attempted
+		FROM quizzes q
+		WHERE q.course_id = $1
+		ORDER BY q.created_at ASC
+	`, courseID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var quizzes []domain.Quiz
+	for rows.Next() {
+		var q domain.Quiz
+		var lessonID pgtype.UUID
+		var lastScore pgtype.Float8
+		if err := rows.Scan(
+			&q.ID,
+			&q.CourseID,
+			&lessonID,
+			&q.Difficulty,
+			&q.Status,
+			&q.CreatedAt,
+			&q.UpdatedAt,
+			&q.QuestionCount,
+			&lastScore,
+			&q.IsAttempted,
+		); err != nil {
+			return nil, err
+		}
+		if lessonID.Valid {
+			id := uuid.UUID(lessonID.Bytes)
+			q.LessonID = &id
+		}
+		if lastScore.Valid {
+			score := lastScore.Float64
+			q.LastScore = &score
+		}
+		quizzes = append(quizzes, q)
 	}
 	return quizzes, nil
 }

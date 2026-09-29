@@ -24,13 +24,16 @@ const (
 )
 
 type Quiz struct {
-	ID         uuid.UUID  `json:"id"`
-	CourseID   uuid.UUID  `json:"course_id"`
-	LessonID   *uuid.UUID `json:"lesson_id"`
-	Difficulty Difficulty `json:"difficulty"`
-	Status     QuizStatus `json:"status"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
+	ID            uuid.UUID  `json:"id"`
+	CourseID      uuid.UUID  `json:"course_id"`
+	LessonID      *uuid.UUID `json:"lesson_id"`
+	Difficulty    Difficulty `json:"difficulty"`
+	Status        QuizStatus `json:"status"`
+	QuestionCount int        `json:"question_count"`
+	LastScore     *float64   `json:"last_score,omitempty"`
+	IsAttempted   bool       `json:"is_attempted"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 type QuestionType string

@@ -45,6 +45,13 @@ func (s *QuizService) ListByCourse(ctx context.Context, courseID uuid.UUID) ([]d
 	return quizzes, nil
 }
 
+func (s *QuizService) ListByCourseWithUser(ctx context.Context, courseID uuid.UUID, userID uuid.UUID) ([]domain.Quiz, error) {
+	if userID == uuid.Nil {
+		return s.ListByCourse(ctx, courseID)
+	}
+	return s.quizzes.ListQuizzesByCourseWithAttempts(ctx, courseID, userID)
+}
+
 type QuizWithQuestions struct {
 	Quiz      domain.Quiz       `json:"quiz"`
 	Questions []domain.Question `json:"questions,omitempty"`

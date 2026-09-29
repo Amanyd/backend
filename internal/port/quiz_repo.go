@@ -13,6 +13,7 @@ type QuizRepository interface {
 	GetQuizByCourseAndDifficulty(ctx context.Context, courseID uuid.UUID, difficulty domain.Difficulty) (*domain.Quiz, error)
 	GetQuizByLessonAndDifficulty(ctx context.Context, lessonID uuid.UUID, difficulty domain.Difficulty) (*domain.Quiz, error)
 	ListQuizzesByCourse(ctx context.Context, courseID uuid.UUID) ([]domain.Quiz, error)
+	ListQuizzesByCourseWithAttempts(ctx context.Context, courseID uuid.UUID, userID uuid.UUID) ([]domain.Quiz, error)
 	UpdateQuizStatus(ctx context.Context, id uuid.UUID, status domain.QuizStatus) error
 	DeleteQuizzesByCourse(ctx context.Context, courseID uuid.UUID) error
 
