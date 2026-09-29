@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/Amanyd/backend/internal/infra/postgres/gen"
 	"github.com/Amanyd/backend/internal/port"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -119,9 +121,12 @@ func (r *analyticsRepo) GetStudentAnalytics(ctx context.Context, userID uuid.UUI
 	res.Leaderboard = []domain.LeaderboardEntry{}
 
 	// 1. User profile
-	err := r.pool.QueryRow(ctx, `SELECT name, rank, enrollment_id FROM users WHERE id = $1`, userID).
+	err := r.pool.QueryRow(ctx, `SELECT name, rank, enrollment_id FROM users WHERE id = $1 AND role = 'student'`, userID).
 		Scan(&res.UserProfile.Name, &res.UserProfile.Rank, &res.UserProfile.EnrollmentID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
 		return nil, fmt.Errorf("scan user profile: %w", err)
 	}
 
@@ -383,6 +388,67 @@ func (r *analyticsRepo) GetInstructorAnalytics(ctx context.Context, instructorID
 					act.Date = endedAt.Time
 				}
 				res.RecentActivity = append(res.RecentActivity, act)
+			}
+		}
+	}
+
+	// 5. All students directory & live rankings
+	res.Students = []domain.StudentDirectoryItem{}
+	stdRows, err := r.pool.Query(ctx, `
+		SELECT
+			u.id,
+			u.name,
+			u.rank,
+			u.enrollment_id,
+			COALESCE(ucp.completed_count, 0) AS courses_completed,
+			COALESCE(ulp.completed_count, 0) AS lessons_completed,
+			COALESCE(att.avg_score, 0)::float AS avg_score,
+			(SELECT COUNT(*) FROM courses WHERE published = true AND (rank = u.rank OR rank = 'officer')) AS courses_enrolled
+		FROM users u
+		LEFT JOIN (
+			SELECT user_id, COUNT(*) AS completed_count
+			FROM user_course_progress
+			WHERE is_completed = true
+			GROUP BY user_id
+		) ucp ON ucp.user_id = u.id
+		LEFT JOIN (
+			SELECT user_id, COUNT(*) AS completed_count
+			FROM user_lesson_progress
+			WHERE is_completed = true
+			GROUP BY user_id
+		) ulp ON ulp.user_id = u.id
+		LEFT JOIN (
+			SELECT user_id, AVG(score) AS avg_score
+			FROM attempts
+			WHERE ended_at IS NOT NULL
+			GROUP BY user_id
+		) att ON att.user_id = u.id
+		WHERE u.role = 'student'
+		ORDER BY avg_score DESC, courses_completed DESC, u.name ASC
+	`)
+	if err == nil {
+		defer stdRows.Close()
+		for stdRows.Next() {
+			var item domain.StudentDirectoryItem
+			if err := stdRows.Scan(
+				&item.ID,
+				&item.Name,
+				&item.Rank,
+				&item.EnrollmentID,
+				&item.CoursesCompleted,
+				&item.LessonsCompleted,
+				&item.AvgScore,
+				&item.CoursesEnrolled,
+			); err == nil {
+				compPct := 0.0
+				if item.CoursesEnrolled > 0 {
+					compPct = (float64(item.CoursesCompleted) / float64(item.CoursesEnrolled)) * 100.0
+					if compPct > 100.0 {
+						compPct = 100.0
+					}
+				}
+				item.ReadinessScore = (item.AvgScore * 0.6) + (compPct * 0.4)
+				res.Students = append(res.Students, item)
 			}
 		}
 	}

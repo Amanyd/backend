@@ -137,8 +137,21 @@ type InstructorStats struct {
 	CohortCourseQuizAvg float64 `json:"cohort_course_quiz_avg"`
 }
 
+type StudentDirectoryItem struct {
+	ID               uuid.UUID `json:"id"`
+	Name             string    `json:"name"`
+	Rank             string    `json:"rank"`
+	EnrollmentID     string    `json:"enrollment_id"`
+	CoursesCompleted int       `json:"courses_completed"`
+	CoursesEnrolled  int       `json:"courses_enrolled"`
+	LessonsCompleted int       `json:"lessons_completed"`
+	AvgScore         float64   `json:"avg_score"`
+	ReadinessScore   float64   `json:"readiness_score"`
+}
+
 type InstructorAnalytics struct {
 	Stats          InstructorStats        `json:"stats"`
 	Courses        []InstructorCourseItem `json:"courses"`
 	RecentActivity []RecentActivityItem   `json:"recent_activity"`
+	Students       []StudentDirectoryItem `json:"students"`
 }

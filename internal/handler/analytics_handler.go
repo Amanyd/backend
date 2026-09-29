@@ -57,3 +57,17 @@ func (h *AnalyticsHandler) InstructorOverview(w http.ResponseWriter, r *http.Req
 	}
 	apierr.WriteData(w, http.StatusOK, data)
 }
+
+func (h *AnalyticsHandler) StudentDetail(w http.ResponseWriter, r *http.Request) {
+	studentID, err := uuid.Parse(chi.URLParam(r, "studentId"))
+	if err != nil {
+		apierr.WriteJSON(w, apierr.BadRequest("invalid student id"))
+		return
+	}
+	data, err := h.svc.GetStudentAnalytics(r.Context(), studentID)
+	if err != nil {
+		apierr.WriteJSON(w, mapDomainError(err))
+		return
+	}
+	apierr.WriteData(w, http.StatusOK, data)
+}

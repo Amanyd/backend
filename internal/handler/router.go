@@ -96,6 +96,7 @@ func NewRouter(
 
 			r.Get("/api/v1/analytics", analytH.Overview)
 			r.Get("/api/v1/analytics/instructor", analytH.InstructorOverview)
+			r.Get("/api/v1/analytics/students/{studentId}", analytH.StudentDetail)
 			r.Get("/api/v1/analytics/{courseId}", analytH.CourseMetrics)
 		})
 	})
