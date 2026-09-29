@@ -78,6 +78,7 @@ func NewRouter(
 		r.Get("/api/v1/chat/sessions", chatH.ListSessions)
 		r.Post("/api/v1/chat/sessions", chatH.CreateSession)
 		r.Get("/api/v1/chat/sessions/{sessionId}/history", chatH.GetHistory)
+		r.Get("/api/v1/analytics/student", analytH.StudentOverview)
 
 		r.Group(func(r chi.Router) {
 			r.Use(RBACMiddleware(domain.RoleInstructor))
@@ -94,6 +95,7 @@ func NewRouter(
 			r.Post("/api/v1/quizzes/{quizId}/reset", quizH.Reset)
 
 			r.Get("/api/v1/analytics", analytH.Overview)
+			r.Get("/api/v1/analytics/instructor", analytH.InstructorOverview)
 			r.Get("/api/v1/analytics/{courseId}", analytH.CourseMetrics)
 		})
 	})

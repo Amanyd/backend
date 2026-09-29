@@ -37,3 +37,11 @@ func (s *AnalyticsService) GetStudentScores(ctx context.Context, courseID uuid.U
 func (s *AnalyticsService) GetOverview(ctx context.Context, instructorID uuid.UUID) (*domain.Overview, error) {
 	return s.analytics.GetOverview(ctx, instructorID)
 }
+
+func (s *AnalyticsService) GetStudentAnalytics(ctx context.Context, userID uuid.UUID) (*domain.StudentAnalytics, error) {
+	return s.analytics.GetStudentAnalytics(ctx, userID)
+}
+
+func (s *AnalyticsService) GetInstructorAnalytics(ctx context.Context, instructorID uuid.UUID) (*domain.InstructorAnalytics, error) {
+	return s.analytics.GetInstructorAnalytics(ctx, instructorID)
+}

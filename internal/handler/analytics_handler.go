@@ -37,3 +37,23 @@ func (h *AnalyticsHandler) CourseMetrics(w http.ResponseWriter, r *http.Request)
 	}
 	apierr.WriteData(w, http.StatusOK, metrics)
 }
+
+func (h *AnalyticsHandler) StudentOverview(w http.ResponseWriter, r *http.Request) {
+	claims := GetClaims(r)
+	data, err := h.svc.GetStudentAnalytics(r.Context(), claims.UserID)
+	if err != nil {
+		apierr.WriteJSON(w, mapDomainError(err))
+		return
+	}
+	apierr.WriteData(w, http.StatusOK, data)
+}
+
+func (h *AnalyticsHandler) InstructorOverview(w http.ResponseWriter, r *http.Request) {
+	claims := GetClaims(r)
+	data, err := h.svc.GetInstructorAnalytics(r.Context(), claims.UserID)
+	if err != nil {
+		apierr.WriteJSON(w, mapDomainError(err))
+		return
+	}
+	apierr.WriteData(w, http.StatusOK, data)
+}

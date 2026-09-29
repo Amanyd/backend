@@ -12,4 +12,6 @@ type AnalyticsRepo interface {
 	GetCourseMetrics(ctx context.Context, courseID uuid.UUID) (*domain.Metric, error)
 	GetStudentScores(ctx context.Context, courseID uuid.UUID) ([]domain.StudentScore, error)
 	GetOverview(ctx context.Context, instructorID uuid.UUID) (*domain.Overview, error)
+	GetStudentAnalytics(ctx context.Context, userID uuid.UUID) (*domain.StudentAnalytics, error)
+	GetInstructorAnalytics(ctx context.Context, instructorID uuid.UUID) (*domain.InstructorAnalytics, error)
 }
