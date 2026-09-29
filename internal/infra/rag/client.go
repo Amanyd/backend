@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Amanyd/backend/internal/port"
@@ -21,7 +22,7 @@ type ragClient struct {
 
 func NewRAGClient(baseURL, token string) port.RagClient {
 	return &ragClient{
-		baseURL: baseURL,
+		baseURL: strings.TrimRight(baseURL, "/"),
 		token:   token,
 		http: &http.Client{
 			Timeout: 60 * time.Second,
@@ -59,10 +60,11 @@ func (c *ragClient) GradeAnswer(ctx context.Context, req port.GradeRequest) (*po
 		return nil, fmt.Errorf("rag marshal grade request: %w", err)
 	}
 
+	endpoint := strings.TrimRight(c.baseURL, "/") + "/api/v1/quiz/grade"
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		c.baseURL+"/api/v1/quiz/grade",
+		endpoint,
 		bytes.NewReader(payload),
 	)
 	if err != nil {
@@ -79,7 +81,8 @@ func (c *ragClient) GradeAnswer(ctx context.Context, req port.GradeRequest) (*po
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("rag grade unexpected status: %d", resp.StatusCode)
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("rag grade unexpected status %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	var gradeResp port.GradeResponse
@@ -90,10 +93,11 @@ func (c *ragClient) GradeAnswer(ctx context.Context, req port.GradeRequest) (*po
 }
 
 func (c *ragClient) DeleteCourse(ctx context.Context, courseID string) error {
+	endpoint := strings.TrimRight(c.baseURL, "/") + "/api/v1/course/" + courseID
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodDelete,
-		c.baseURL+"/api/v1/course/"+courseID,
+		endpoint,
 		nil,
 	)
 	if err != nil {
@@ -109,7 +113,8 @@ func (c *ragClient) DeleteCourse(ctx context.Context, courseID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("rag delete unexpected status: %d", resp.StatusCode)
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("rag delete unexpected status %d: %s", resp.StatusCode, string(respBody))
 	}
 	return nil
 }
@@ -120,10 +125,11 @@ func (c *ragClient) doRequest(ctx context.Context, req port.ChatRequest, stream 
 		return nil, fmt.Errorf("rag marshal request: %w", err)
 	}
 
-	httpReq, err := 		http.NewRequestWithContext(
+	endpoint := strings.TrimRight(c.baseURL, "/") + "/api/v1/chat/"
+	httpReq, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		c.baseURL+"/api/v1/chat/",
+		endpoint,
 		bytes.NewReader(payload),
 	)
 	if err != nil {
@@ -143,8 +149,9 @@ func (c *ragClient) doRequest(ctx context.Context, req port.ChatRequest, stream 
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("rag unexpected status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("rag unexpected status %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	return resp.Body, nil

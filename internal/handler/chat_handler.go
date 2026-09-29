@@ -86,7 +86,7 @@ func (h *ChatHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	claims := GetClaims(r)
 	stream, err := h.svc.SendMessage(r.Context(), sessionID, claims.UserID, req.Query)
 	if err != nil {
-		apierr.WriteJSON(w, mapDomainError(err))
+		apierr.WriteJSON(w, apierr.Internal(err.Error()))
 		return
 	}
 	defer stream.Close()
