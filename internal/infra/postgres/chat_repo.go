@@ -70,7 +70,7 @@ func (r *chatRepo) ListSessionsByUser(ctx context.Context, userID uuid.UUID) ([]
 	}
 	defer rows.Close()
 
-	var sessions []domain.ChatSession
+	sessions := make([]domain.ChatSession, 0)
 	for rows.Next() {
 		var s domain.ChatSession
 		var courseID *uuid.UUID
