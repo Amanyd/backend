@@ -7,31 +7,31 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
 
+    # Swapped MinIO for SeaweedFS (Full Free Open Source S3 Alternative)
   minio:
-    image: quay.io/minio/minio:latest
+    image: chrislusf/seaweedfs:latest
     ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
-    command: server /data --console-address ":9001"
+      - "9000:8333" # S3 API endpoint maps to your application's 9000 port
+      - "9001:9001" # Web Console maps to port 9001
+    command: 'server -s3 -s3.port=8333 -filer -master.volumeSizeLimitMB=1024'
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-f", "http://localhost:8333/"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # One-time script to automatically create your bucket on startup
   minio-init:
-    image: quay.io/minio/mc
+    image: alpine:latest
     depends_on:
       minio:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
-      mc alias set local http://minio:9000 minioadmin minioadmin;
-      mc mb --ignore-existing local/course-files;
+      apk add --no-cache curl;
+      curl -X PUT http://minio:8333/course-files;
       "
 
   nats:
