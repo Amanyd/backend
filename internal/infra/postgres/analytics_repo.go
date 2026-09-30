@@ -416,7 +416,7 @@ func (r *analyticsRepo) GetInstructorAnalytics(ctx context.Context, instructorID
 		JOIN users u ON u.id = a.user_id
 		WHERE c.instructor_id = $1 AND a.ended_at IS NOT NULL
 		ORDER BY a.ended_at DESC
-		LIMIT 8
+		LIMIT 5
 	`, instructorID)
 	if err == nil {
 		defer actRows.Close()
