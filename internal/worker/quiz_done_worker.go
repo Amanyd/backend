@@ -242,30 +242,16 @@ func handleQuizDone(ctx context.Context, msg jetstream.Msg, deps QuizDoneWorkerD
 				}
 			}
 
+			// Mark course quizzes as Ready immediately — they dynamically sample from
+			// the comprehensive lesson question banks created across all lessons.
 			for _, diff := range []domain.Difficulty{domain.DifficultyEasy, domain.DifficultyMedium, domain.DifficultyHard} {
 				q := &domain.Quiz{
 					CourseID:   courseID,
 					Difficulty: diff,
-					Status:     domain.QuizGenerating,
+					Status:     domain.QuizReady,
 				}
 				if err := deps.Quizzes.CreateQuiz(ctx, q); err != nil {
 					log.Error("Failed to create course quiz", zap.Error(err))
-					continue
-				}
-
-				reqPayload, err := json.Marshal(map[string]any{
-					"type":         "course",
-					"course_id":    courseID.String(),
-					"difficulty":   string(diff),
-					"keywords":     allKeywords,
-					"limit_chunks": 20,
-				})
-				if err != nil {
-					log.Error("Failed to marshal course quiz request", zap.Error(err))
-					continue
-				}
-				if err := deps.Queue.Publish(ctx, nats.SubjectQuizRequest, reqPayload); err != nil {
-					log.Error("Failed to publish course quiz request", zap.Error(err))
 					continue
 				}
 			}

@@ -249,22 +249,9 @@ func (s *CourseService) Finalize(ctx context.Context, courseID, instructorID uui
 			q := &domain.Quiz{
 				CourseID:   courseID,
 				Difficulty: diff,
-				Status:     domain.QuizGenerating,
+				Status:     domain.QuizReady,
 			}
-			if err := s.quizzes.CreateQuiz(ctx, q); err != nil {
-				continue
-			}
-
-			payload, err := json.Marshal(map[string]any{
-				"type":         "course",
-				"course_id":    courseID.String(),
-				"difficulty":   string(diff),
-				"keywords":     []string{},
-				"limit_chunks": 20,
-			})
-			if err == nil {
-				_ = s.queue.Publish(ctx, nats.SubjectQuizRequest, payload)
-			}
+			_ = s.quizzes.CreateQuiz(ctx, q)
 		}
 	}
 
