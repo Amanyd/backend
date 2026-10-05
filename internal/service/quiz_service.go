@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/Amanyd/backend/internal/domain"
@@ -61,30 +63,47 @@ type QuizWithQuestions struct {
 }
 
 func (s *QuizService) GetQuiz(ctx context.Context, quizID uuid.UUID) (*QuizWithQuestions, error) {
-	key := "quiz:" + quizID.String()
-
-	if cached, err := s.cache.Get(ctx, key); err == nil {
-		var result QuizWithQuestions
-		if json.Unmarshal([]byte(cached), &result) == nil {
-			return &result, nil
-		}
-	}
-
 	quiz, err := s.quizzes.GetQuizByID(ctx, quizID)
 	if err != nil {
 		return nil, err
 	}
 
-	questions, err := s.quizzes.ListQuestionsByQuiz(ctx, quizID)
-	if err != nil {
-		return nil, err
+	var questions []domain.Question
+	if quiz.LessonID != nil {
+		// Lesson quiz: Sample 5 random questions from the question bank
+		questions, err = s.quizzes.SampleQuestionsByQuiz(ctx, quizID, 5)
+	} else {
+		// Course final exam: Sample 20 random questions across the course
+		questions, err = s.quizzes.SampleQuestionsByCourse(ctx, quiz.CourseID, 20)
+	}
+	if err != nil || len(questions) == 0 {
+		questions, err = s.quizzes.ListQuestionsByQuiz(ctx, quizID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	result := &QuizWithQuestions{Quiz: *quiz, Questions: questions}
-	if data, err := json.Marshal(result); err == nil {
-		s.cache.Set(ctx, key, string(data), 10*time.Minute)
+	// Shuffle choices for each question and relabel A, B, C, D
+	labels := []string{"A", "B", "C", "D"}
+	for i := range questions {
+		if len(questions[i].Choices) > 1 {
+			shuffled := make([]domain.Choice, len(questions[i].Choices))
+			copy(shuffled, questions[i].Choices)
+			rand.Shuffle(len(shuffled), func(a, b int) {
+				shuffled[a], shuffled[b] = shuffled[b], shuffled[a]
+			})
+			for ci := range shuffled {
+				if ci < len(labels) {
+					shuffled[ci].Label = labels[ci]
+				}
+			}
+			questions[i].Choices = shuffled
+		}
+		// Strip answer from question payload sent to client
+		questions[i].Answer = ""
 	}
-	return result, nil
+
+	return &QuizWithQuestions{Quiz: *quiz, Questions: questions}, nil
 }
 
 func (s *QuizService) StartAttempt(ctx context.Context, quizID, userID uuid.UUID) (*domain.Attempt, error) {
@@ -121,7 +140,17 @@ func (s *QuizService) SubmitAnswer(ctx context.Context, attemptID, questionID uu
 			isCorrect = grade.IsCorrect
 		}
 	} else {
-		isCorrect = userAnswer == question.Answer
+		// Identify correct choice text from database
+		var correctAnswerText string
+		for _, c := range question.Choices {
+			if c.Label == question.Answer {
+				correctAnswerText = c.Text
+				break
+			}
+		}
+		cleanUserAnswer := strings.TrimSpace(userAnswer)
+		isCorrect = (cleanUserAnswer == question.Answer) ||
+			(correctAnswerText != "" && strings.EqualFold(cleanUserAnswer, strings.TrimSpace(correctAnswerText)))
 	}
 
 	answer := &domain.Answer{

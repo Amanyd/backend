@@ -177,14 +177,10 @@ func (r *quizRepo) CreateQuestions(ctx context.Context, questions []domain.Quest
 		if err != nil {
 			return err
 		}
-		_, err = r.q.CreateQuestion(ctx, gen.CreateQuestionParams{
-			QuizID:   q.QuizID,
-			Type:     string(q.Type),
-			Question: q.Question,
-			Choices:  choicesJSON,
-			Answer:   q.Answer,
-			OrderIdx: int32(q.OrderIdx),
-		})
+		_, err = r.pool.Exec(ctx, `
+			INSERT INTO questions (quiz_id, type, question, choices, answer, order_idx, explanation, difficulty, topic_phrase)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`, q.QuizID, string(q.Type), q.Question, choicesJSON, q.Answer, int32(q.OrderIdx), q.Explanation, q.Difficulty, q.TopicPhrase)
 		if err != nil {
 			return err
 		}
@@ -193,51 +189,133 @@ func (r *quizRepo) CreateQuestions(ctx context.Context, questions []domain.Quest
 }
 
 func (r *quizRepo) ListQuestionsByQuiz(ctx context.Context, quizID uuid.UUID) ([]domain.Question, error) {
-	rows, err := r.q.ListQuestionsByQuiz(ctx, quizID)
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, quiz_id, type, question, choices, answer, order_idx, explanation, difficulty, topic_phrase
+		FROM questions
+		WHERE quiz_id = $1
+		ORDER BY order_idx ASC
+	`, quizID)
 	if err != nil {
 		return nil, err
 	}
-	questions := make([]domain.Question, 0, len(rows))
-	for _, row := range rows {
-		q, err := toDomainQuestion(row)
-		if err != nil {
+	defer rows.Close()
+
+	return r.scanQuestions(rows)
+}
+
+func (r *quizRepo) SampleQuestionsByQuiz(ctx context.Context, quizID uuid.UUID, limit int) ([]domain.Question, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, quiz_id, type, question, choices, answer, order_idx, explanation, difficulty, topic_phrase
+		FROM questions
+		WHERE quiz_id = $1
+		ORDER BY RANDOM()
+		LIMIT $2
+	`, quizID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanQuestions(rows)
+}
+
+func (r *quizRepo) SampleQuestionsByCourse(ctx context.Context, courseID uuid.UUID, limit int) ([]domain.Question, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT q.id, q.quiz_id, q.type, q.question, q.choices, q.answer, q.order_idx, q.explanation, q.difficulty, q.topic_phrase
+		FROM questions q
+		JOIN quizzes qz ON qz.id = q.quiz_id
+		WHERE qz.course_id = $1
+		ORDER BY RANDOM()
+		LIMIT $2
+	`, courseID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return r.scanQuestions(rows)
+}
+
+func (r *quizRepo) scanQuestions(rows pgx.Rows) ([]domain.Question, error) {
+	questions := make([]domain.Question, 0)
+	for rows.Next() {
+		var q domain.Question
+		var choicesBytes []byte
+		var explanation, difficulty, topicPhrase pgtype.Text
+		if err := rows.Scan(
+			&q.ID,
+			&q.QuizID,
+			&q.Type,
+			&q.Question,
+			&choicesBytes,
+			&q.Answer,
+			&q.OrderIdx,
+			&explanation,
+			&difficulty,
+			&topicPhrase,
+		); err != nil {
 			return nil, err
 		}
-		questions = append(questions, *q)
+		if len(choicesBytes) > 0 {
+			_ = json.Unmarshal(choicesBytes, &q.Choices)
+		}
+		if explanation.Valid {
+			q.Explanation = explanation.String
+		}
+		if difficulty.Valid {
+			q.Difficulty = difficulty.String
+		}
+		if topicPhrase.Valid {
+			q.TopicPhrase = topicPhrase.String
+		}
+		questions = append(questions, q)
 	}
 	return questions, nil
 }
 
 func (r *quizRepo) GetQuestionByID(ctx context.Context, id uuid.UUID) (*domain.Question, error) {
-	row, err := r.q.GetQuestionByID(ctx, id)
+	var q domain.Question
+	var choicesBytes []byte
+	var explanation, difficulty, topicPhrase pgtype.Text
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, quiz_id, type, question, choices, answer, order_idx, explanation, difficulty, topic_phrase
+		FROM questions
+		WHERE id = $1
+	`, id).Scan(
+		&q.ID,
+		&q.QuizID,
+		&q.Type,
+		&q.Question,
+		&choicesBytes,
+		&q.Answer,
+		&q.OrderIdx,
+		&explanation,
+		&difficulty,
+		&topicPhrase,
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}
-	return toDomainQuestion(row)
-}
-func (r *quizRepo) DeleteQuestionsByQuiz(ctx context.Context, quizID uuid.UUID) error {
-	return r.q.DeleteQuestionsByQuiz(ctx, quizID)
+	if len(choicesBytes) > 0 {
+		_ = json.Unmarshal(choicesBytes, &q.Choices)
+	}
+	if explanation.Valid {
+		q.Explanation = explanation.String
+	}
+	if difficulty.Valid {
+		q.Difficulty = difficulty.String
+	}
+	if topicPhrase.Valid {
+		q.TopicPhrase = topicPhrase.String
+	}
+	return &q, nil
 }
 
-func toDomainQuestion(q gen.Question) (*domain.Question, error) {
-	choices := []domain.Choice{}
-	if len(q.Choices) > 0 {
-		if err := json.Unmarshal(q.Choices, &choices); err != nil {
-			return nil, err
-		}
-	}
-	return &domain.Question{
-		ID:       q.ID,
-		QuizID:   q.QuizID,
-		Type:     domain.QuestionType(q.Type),
-		Question: q.Question,
-		Choices:  choices,
-		Answer:   q.Answer,
-		OrderIdx: int(q.OrderIdx),
-	}, nil
+func (r *quizRepo) DeleteQuestionsByQuiz(ctx context.Context, quizID uuid.UUID) error {
+	return r.q.DeleteQuestionsByQuiz(ctx, quizID)
 }
 
 // Attempts

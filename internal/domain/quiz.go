@@ -49,13 +49,37 @@ type Choice struct {
 }
 
 type Question struct {
-	ID       uuid.UUID    `json:"id"`
-	QuizID   uuid.UUID    `json:"quiz_id"`
-	Type     QuestionType `json:"type"`
-	Question string       `json:"question"`
-	Choices  []Choice      `json:"choices"`
-	Answer   string       `json:"answer"`
-	OrderIdx int          `json:"order_idx"`
+	ID          uuid.UUID    `json:"id"`
+	QuizID      uuid.UUID    `json:"quiz_id"`
+	Type        QuestionType `json:"type"`
+	Question    string       `json:"question"`
+	Choices     []Choice     `json:"choices"`
+	Answer      string       `json:"answer"`
+	OrderIdx    int          `json:"order_idx"`
+	TopicID     *uuid.UUID   `json:"topic_id,omitempty"`
+	Explanation string       `json:"explanation,omitempty"`
+	Difficulty  string       `json:"difficulty,omitempty"`
+	TopicPhrase string       `json:"topic_phrase,omitempty"`
+}
+
+type TopicSlide struct {
+	SlideNumber    int      `json:"slide_number"`
+	SlideType      string   `json:"slide_type"`
+	Title          string   `json:"title"`
+	Bullets        []string `json:"bullets"`
+	FormulaOrRule  string   `json:"formula_or_rule,omitempty"`
+	DiagramMermaid string   `json:"diagram_mermaid,omitempty"`
+	Warning        string   `json:"warning,omitempty"`
+}
+
+type LessonTopic struct {
+	ID         uuid.UUID    `json:"id"`
+	LessonID   uuid.UUID    `json:"lesson_id"`
+	Title      string       `json:"title"`
+	OrderIndex int          `json:"order_index"`
+	Slides     []TopicSlide `json:"slides"`
+	CreatedAt  time.Time    `json:"created_at"`
+	UpdatedAt  time.Time    `json:"updated_at"`
 }
 
 type Attempt struct {

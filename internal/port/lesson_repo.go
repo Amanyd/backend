@@ -13,5 +13,7 @@ type LessonRepository interface {
 	ListByCourse(ctx context.Context, courseID uuid.UUID) ([]domain.Lesson, error)
 	Update(ctx context.Context, lesson *domain.Lesson) error
 	UpdateKeywords(ctx context.Context, id uuid.UUID, keywords []byte) error
+	CreateTopics(ctx context.Context, lessonID uuid.UUID, topics []domain.LessonTopic) error
+	ListTopicsByLesson(ctx context.Context, lessonID uuid.UUID) ([]domain.LessonTopic, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }

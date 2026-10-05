@@ -19,6 +19,8 @@ type QuizRepository interface {
 
 	CreateQuestions(ctx context.Context, questions []domain.Question) error
 	ListQuestionsByQuiz(ctx context.Context, quizID uuid.UUID) ([]domain.Question, error)
+	SampleQuestionsByQuiz(ctx context.Context, quizID uuid.UUID, limit int) ([]domain.Question, error)
+	SampleQuestionsByCourse(ctx context.Context, courseID uuid.UUID, limit int) ([]domain.Question, error)
 	GetQuestionByID(ctx context.Context, id uuid.UUID) (*domain.Question, error)
 	DeleteQuestionsByQuiz(ctx context.Context, quizID uuid.UUID) error
 

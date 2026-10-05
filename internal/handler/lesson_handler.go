@@ -106,3 +106,18 @@ func (h *LessonHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *LessonHandler) ListTopics(w http.ResponseWriter, r *http.Request) {
+	lessonID, err := uuid.Parse(chi.URLParam(r, "lessonId"))
+	if err != nil {
+		apierr.WriteJSON(w, apierr.BadRequest("invalid lesson id"))
+		return
+	}
+
+	topics, err := h.svc.ListLessonTopics(r.Context(), lessonID)
+	if err != nil {
+		apierr.WriteJSON(w, mapDomainError(err))
+		return
+	}
+	apierr.WriteData(w, http.StatusOK, topics)
+}

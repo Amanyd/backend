@@ -352,6 +352,10 @@ func (s *CourseService) ListLessons(ctx context.Context, courseID uuid.UUID) ([]
 	return lessons, nil
 }
 
+func (s *CourseService) ListLessonTopics(ctx context.Context, lessonID uuid.UUID) ([]domain.LessonTopic, error) {
+	return s.lessons.ListTopicsByLesson(ctx, lessonID)
+}
+
 func (s *CourseService) UpdateLesson(ctx context.Context, lessonID, instructorID uuid.UUID, title string, orderIdx int) (*domain.Lesson, error) {
 	lesson, err := s.lessons.GetByID(ctx, lessonID)
 	if err != nil {

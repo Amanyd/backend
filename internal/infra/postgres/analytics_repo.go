@@ -356,10 +356,10 @@ func (r *analyticsRepo) GetInstructorAnalytics(ctx context.Context, instructorID
 	rows, err := r.pool.Query(ctx, `
 		SELECT c.id, c.title, c.published,
 			(SELECT COUNT(*) FROM lessons WHERE course_id = c.id) AS total_lessons,
-			(SELECT COUNT(DISTINCT a.user_id) FROM attempts a JOIN quizzes q ON q.id = a.quiz_id WHERE q.course_id = c.id) AS enrolled_students,
-			(SELECT COUNT(DISTINCT ucp.user_id) FROM user_course_progress ucp WHERE ucp.course_id = c.id AND ucp.is_completed = true) AS completed_students,
-			COALESCE((SELECT AVG(a.score) FROM attempts a JOIN quizzes q ON q.id = a.quiz_id WHERE q.course_id = c.id AND a.ended_at IS NOT NULL AND q.lesson_id IS NOT NULL), 0)::float AS lesson_quiz_avg,
-			COALESCE((SELECT AVG(a.score) FROM attempts a JOIN quizzes q ON q.id = a.quiz_id WHERE q.course_id = c.id AND a.ended_at IS NOT NULL AND q.lesson_id IS NULL), 0)::float AS course_quiz_avg
+			(SELECT COUNT(DISTINCT a.user_id) FROM attempts a JOIN quizzes q ON q.id = a.quiz_id JOIN users u ON u.id = a.user_id WHERE q.course_id = c.id AND u.role = 'student') AS enrolled_students,
+			(SELECT COUNT(DISTINCT ucp.user_id) FROM user_course_progress ucp JOIN users u ON u.id = ucp.user_id WHERE ucp.course_id = c.id AND ucp.is_completed = true AND u.role = 'student') AS completed_students,
+			COALESCE((SELECT AVG(a.score) FROM attempts a JOIN quizzes q ON q.id = a.quiz_id JOIN users u ON u.id = a.user_id WHERE q.course_id = c.id AND a.ended_at IS NOT NULL AND q.lesson_id IS NOT NULL AND u.role = 'student'), 0)::float AS lesson_quiz_avg,
+			COALESCE((SELECT AVG(a.score) FROM attempts a JOIN quizzes q ON q.id = a.quiz_id JOIN users u ON u.id = a.user_id WHERE q.course_id = c.id AND a.ended_at IS NOT NULL AND q.lesson_id IS NULL AND u.role = 'student'), 0)::float AS course_quiz_avg
 		FROM courses c
 		WHERE c.instructor_id = $1
 		ORDER BY c.created_at DESC
@@ -390,7 +390,8 @@ func (r *analyticsRepo) GetInstructorAnalytics(ctx context.Context, instructorID
 		FROM attempts a
 		JOIN quizzes q ON q.id = a.quiz_id
 		JOIN courses c ON c.id = q.course_id
-		WHERE c.instructor_id = $1
+		JOIN users u ON u.id = a.user_id
+		WHERE c.instructor_id = $1 AND u.role = 'student'
 	`, instructorID).Scan(&res.Stats.TotalStudentsActive)
 
 	// 3. Cohort averages
@@ -402,7 +403,8 @@ func (r *analyticsRepo) GetInstructorAnalytics(ctx context.Context, instructorID
 		FROM attempts a
 		JOIN quizzes q ON q.id = a.quiz_id
 		JOIN courses c ON c.id = q.course_id
-		WHERE c.instructor_id = $1 AND a.ended_at IS NOT NULL
+		JOIN users u ON u.id = a.user_id
+		WHERE c.instructor_id = $1 AND a.ended_at IS NOT NULL AND u.role = 'student'
 	`, instructorID).Scan(&res.Stats.OverallAvgQuizScore, &res.Stats.CohortLessonQuizAvg, &res.Stats.CohortCourseQuizAvg)
 
 	// 4. Recent activity
@@ -414,7 +416,7 @@ func (r *analyticsRepo) GetInstructorAnalytics(ctx context.Context, instructorID
 		JOIN quizzes q ON q.id = a.quiz_id
 		JOIN courses c ON c.id = q.course_id
 		JOIN users u ON u.id = a.user_id
-		WHERE c.instructor_id = $1 AND a.ended_at IS NOT NULL
+		WHERE c.instructor_id = $1 AND a.ended_at IS NOT NULL AND u.role = 'student'
 		ORDER BY a.ended_at DESC
 		LIMIT 5
 	`, instructorID)

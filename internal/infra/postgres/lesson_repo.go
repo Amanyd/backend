@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/Amanyd/backend/internal/domain"
@@ -13,11 +14,12 @@ import (
 )
 
 type lessonRepo struct {
-	q *gen.Queries
+	pool *pgxpool.Pool
+	q    *gen.Queries
 }
 
 func NewLessonRepo(pool *pgxpool.Pool) port.LessonRepository {
-	return &lessonRepo{q: gen.New(pool)}
+	return &lessonRepo{pool: pool, q: gen.New(pool)}
 }
 
 func (r *lessonRepo) Create(ctx context.Context, l *domain.Lesson) error {
@@ -81,6 +83,52 @@ func (r *lessonRepo) UpdateKeywords(ctx context.Context, id uuid.UUID, keywords 
 
 func (r *lessonRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return r.q.DeleteLesson(ctx, id)
+}
+
+func (r *lessonRepo) CreateTopics(ctx context.Context, lessonID uuid.UUID, topics []domain.LessonTopic) error {
+	_, _ = r.pool.Exec(ctx, `DELETE FROM lesson_topics WHERE lesson_id = $1`, lessonID)
+
+	for i, t := range topics {
+		slidesJSON, err := json.Marshal(t.Slides)
+		if err != nil {
+			return err
+		}
+		_, err = r.pool.Exec(ctx, `
+			INSERT INTO lesson_topics (lesson_id, title, order_index, slides)
+			VALUES ($1, $2, $3, $4)
+		`, lessonID, t.Title, i, slidesJSON)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *lessonRepo) ListTopicsByLesson(ctx context.Context, lessonID uuid.UUID) ([]domain.LessonTopic, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, lesson_id, title, order_index, slides, created_at, updated_at
+		FROM lesson_topics
+		WHERE lesson_id = $1
+		ORDER BY order_index ASC
+	`, lessonID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	topics := make([]domain.LessonTopic, 0)
+	for rows.Next() {
+		var t domain.LessonTopic
+		var slidesBytes []byte
+		if err := rows.Scan(&t.ID, &t.LessonID, &t.Title, &t.OrderIndex, &slidesBytes, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		if len(slidesBytes) > 0 {
+			_ = json.Unmarshal(slidesBytes, &t.Slides)
+		}
+		topics = append(topics, t)
+	}
+	return topics, nil
 }
 
 func toDomainLesson(l gen.Lesson) *domain.Lesson {

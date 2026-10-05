@@ -48,6 +48,11 @@ func StartQuizDoneWorker(ctx context.Context, js jetstream.JetStream, deps QuizD
 	})
 }
 
+type rawTopic struct {
+	Title  string              `json:"title"`
+	Slides []domain.TopicSlide `json:"slides"`
+}
+
 type quizDonePayload struct {
 	Type       string        `json:"type"`
 	Status     string        `json:"status"`
@@ -56,13 +61,17 @@ type quizDonePayload struct {
 	Difficulty string        `json:"difficulty"`
 	Keywords   []string      `json:"keywords,omitempty"`
 	Questions  []rawQuestion `json:"questions"`
+	Topics     []rawTopic    `json:"topics,omitempty"`
 }
 
 type rawQuestion struct {
-	Type     string          `json:"type"`
-	Question string          `json:"question"`
-	Choices  json.RawMessage `json:"choices"`
-	Answer   string          `json:"answer"`
+	Type        string          `json:"type"`
+	Question    string          `json:"question"`
+	Choices     json.RawMessage `json:"choices"`
+	Answer      string          `json:"answer"`
+	Explanation string          `json:"explanation,omitempty"`
+	Difficulty  string          `json:"difficulty,omitempty"`
+	TopicPhrase string          `json:"topic_phrase,omitempty"`
 }
 
 func handleQuizDone(ctx context.Context, msg jetstream.Msg, deps QuizDoneWorkerDeps, log *zap.Logger) error {
@@ -100,6 +109,23 @@ func handleQuizDone(ctx context.Context, msg jetstream.Msg, deps QuizDoneWorkerD
 				if err := deps.Lessons.UpdateKeywords(ctx, lessonID, b); err != nil {
 					log.Error("failed to save keywords to lesson", zap.Error(err))
 				}
+			}
+		}
+
+		if len(payload.Topics) > 0 {
+			lessonTopics := make([]domain.LessonTopic, len(payload.Topics))
+			for i, rt := range payload.Topics {
+				lessonTopics[i] = domain.LessonTopic{
+					LessonID:   lessonID,
+					Title:      rt.Title,
+					OrderIndex: i,
+					Slides:     rt.Slides,
+				}
+			}
+			if err := deps.Lessons.CreateTopics(ctx, lessonID, lessonTopics); err != nil {
+				log.Error("failed to save lesson topics", zap.Error(err))
+			} else {
+				log.Info("saved lesson topics", zap.String("lesson_id", lessonID.String()), zap.Int("topics", len(lessonTopics)))
 			}
 		}
 
@@ -143,12 +169,15 @@ func handleQuizDone(ctx context.Context, msg jetstream.Msg, deps QuizDoneWorkerD
 		}
 
 		questions[i] = domain.Question{
-			QuizID:   quiz.ID,
-			Type:     domain.QuestionType(rq.Type),
-			Question: rq.Question,
-			Choices:  choices,
-			Answer:   rq.Answer,
-			OrderIdx: i,
+			QuizID:      quiz.ID,
+			Type:        domain.QuestionType(rq.Type),
+			Question:    rq.Question,
+			Choices:     choices,
+			Answer:      rq.Answer,
+			OrderIdx:    i,
+			Explanation: rq.Explanation,
+			Difficulty:  rq.Difficulty,
+			TopicPhrase: rq.TopicPhrase,
 		}
 	}
 
