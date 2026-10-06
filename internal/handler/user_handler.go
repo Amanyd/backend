@@ -7,7 +7,9 @@ import (
 	"github.com/Amanyd/backend/internal/domain"
 	"github.com/Amanyd/backend/internal/service"
 	"github.com/Amanyd/backend/pkg/apierr"
+	"github.com/Amanyd/backend/pkg/logger"
 	"github.com/Amanyd/backend/pkg/validator"
+	"go.uber.org/zap"
 )
 
 type UserHandler struct {
@@ -35,6 +37,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.svc.Register(r.Context(), req.Name, req.EnrollmentID, req.Rank, req.Password, domain.Role(req.Role))
 	if err != nil {
+		logger.FromCtx(r.Context()).Error("register failed", zap.Error(err), zap.String("enrollment_id", req.EnrollmentID))
 		apierr.WriteJSON(w, mapDomainError(err))
 		return
 	}
