@@ -70,11 +70,11 @@ func (s *QuizService) GetQuiz(ctx context.Context, quizID uuid.UUID) (*QuizWithQ
 
 	var questions []domain.Question
 	if quiz.LessonID != nil {
-		// Lesson quiz: Sample 5 random questions from the question bank
-		questions, err = s.quizzes.SampleQuestionsByQuiz(ctx, quizID, 5)
+		// Lesson quiz: 1 easy question per topic from the question bank
+		questions, err = s.quizzes.SampleQuestionsByQuiz(ctx, quizID, 0)
 	} else {
-		// Course final exam: Sample 20 random questions across the course
-		questions, err = s.quizzes.SampleQuestionsByCourse(ctx, quiz.CourseID, 20)
+		// Course exam: sample questions matching difficulty (medium for basic, hard for advanced)
+		questions, err = s.quizzes.SampleQuestionsByCourse(ctx, quiz.CourseID, quiz.Difficulty, 0)
 	}
 	if err != nil || len(questions) == 0 {
 		questions, err = s.quizzes.ListQuestionsByQuiz(ctx, quizID)

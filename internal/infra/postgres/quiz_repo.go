@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/Amanyd/backend/internal/domain"
 	"github.com/Amanyd/backend/internal/infra/postgres/gen"
@@ -204,13 +205,30 @@ func (r *quizRepo) ListQuestionsByQuiz(ctx context.Context, quizID uuid.UUID) ([
 }
 
 func (r *quizRepo) SampleQuestionsByQuiz(ctx context.Context, quizID uuid.UUID, limit int) ([]domain.Question, error) {
-	rows, err := r.pool.Query(ctx, `
+	// Pick 1 easy question per topic from the question bank.
+	// If limit > 0, cap the total questions returned; otherwise return 1 per topic for all topics.
+	limitClause := ""
+	if limit > 0 {
+		limitClause = fmt.Sprintf("LIMIT %d", limit)
+	}
+	query := fmt.Sprintf(`
+		WITH ranked AS (
+			SELECT id, quiz_id, type, question, choices, answer, order_idx, explanation, difficulty, topic_phrase,
+			       ROW_NUMBER() OVER (
+			           PARTITION BY COALESCE(NULLIF(topic_phrase, ''), id::text)
+			           ORDER BY (CASE WHEN difficulty = 'easy' THEN 0 WHEN difficulty = 'medium' THEN 1 ELSE 2 END), RANDOM()
+			       ) as rn
+			FROM questions
+			WHERE quiz_id = $1
+		)
 		SELECT id, quiz_id, type, question, choices, answer, order_idx, explanation, difficulty, topic_phrase
-		FROM questions
-		WHERE quiz_id = $1
+		FROM ranked
+		WHERE rn = 1
 		ORDER BY RANDOM()
-		LIMIT $2
-	`, quizID, limit)
+		%s
+	`, limitClause)
+
+	rows, err := r.pool.Query(ctx, query, quizID)
 	if err != nil {
 		return nil, err
 	}
@@ -219,21 +237,56 @@ func (r *quizRepo) SampleQuestionsByQuiz(ctx context.Context, quizID uuid.UUID, 
 	return r.scanQuestions(rows)
 }
 
-func (r *quizRepo) SampleQuestionsByCourse(ctx context.Context, courseID uuid.UUID, limit int) ([]domain.Question, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT q.id, q.quiz_id, q.type, q.question, q.choices, q.answer, q.order_idx, q.explanation, q.difficulty, q.topic_phrase
-		FROM questions q
-		JOIN quizzes qz ON qz.id = q.quiz_id
-		WHERE qz.course_id = $1
+func (r *quizRepo) SampleQuestionsByCourse(ctx context.Context, courseID uuid.UUID, difficulty domain.Difficulty, limit int) ([]domain.Question, error) {
+	// Filter questions by difficulty across all lessons in the course:
+	// "medium" for Basic course assessment, "hard" for Advanced course assessment.
+	limitClause := ""
+	if limit > 0 {
+		limitClause = fmt.Sprintf("LIMIT %d", limit)
+	}
+	query := fmt.Sprintf(`
+		WITH filtered AS (
+			SELECT q.id, q.quiz_id, q.type, q.question, q.choices, q.answer, q.order_idx, q.explanation, q.difficulty, q.topic_phrase
+			FROM questions q
+			JOIN quizzes qz ON qz.id = q.quiz_id
+			WHERE qz.course_id = $1 AND ($2 = '' OR q.difficulty = $2)
+		)
+		SELECT id, quiz_id, type, question, choices, answer, order_idx, explanation, difficulty, topic_phrase
+		FROM filtered
 		ORDER BY RANDOM()
-		LIMIT $2
-	`, courseID, limit)
+		%s
+	`, limitClause)
+
+	rows, err := r.pool.Query(ctx, query, courseID, string(difficulty))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	return r.scanQuestions(rows)
+	questions, err := r.scanQuestions(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fallback if no questions matched the specific difficulty
+	if len(questions) == 0 && difficulty != "" {
+		fallbackQuery := fmt.Sprintf(`
+			SELECT q.id, q.quiz_id, q.type, q.question, q.choices, q.answer, q.order_idx, q.explanation, q.difficulty, q.topic_phrase
+			FROM questions q
+			JOIN quizzes qz ON qz.id = q.quiz_id
+			WHERE qz.course_id = $1
+			ORDER BY RANDOM()
+			%s
+		`, limitClause)
+		fallbackRows, err := r.pool.Query(ctx, fallbackQuery, courseID)
+		if err != nil {
+			return nil, err
+		}
+		defer fallbackRows.Close()
+		return r.scanQuestions(fallbackRows)
+	}
+
+	return questions, nil
 }
 
 func (r *quizRepo) scanQuestions(rows pgx.Rows) ([]domain.Question, error) {

@@ -245,7 +245,7 @@ func (s *CourseService) Finalize(ctx context.Context, courseID, instructorID uui
 	// If no lesson quizzes were queued (because no lesson had a DOCX file),
 	// trigger the course quizzes immediately.
 	if lessonQuizzesQueued == 0 {
-		for _, diff := range []domain.Difficulty{domain.DifficultyEasy, domain.DifficultyMedium, domain.DifficultyHard} {
+		for _, diff := range []domain.Difficulty{domain.DifficultyMedium, domain.DifficultyHard} {
 			q := &domain.Quiz{
 				CourseID:   courseID,
 				Difficulty: diff,

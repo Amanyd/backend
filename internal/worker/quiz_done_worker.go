@@ -243,8 +243,8 @@ func handleQuizDone(ctx context.Context, msg jetstream.Msg, deps QuizDoneWorkerD
 			}
 
 			// Mark course quizzes as Ready immediately — they dynamically sample from
-			// the comprehensive lesson question banks created across all lessons.
-			for _, diff := range []domain.Difficulty{domain.DifficultyEasy, domain.DifficultyMedium, domain.DifficultyHard} {
+			// the comprehensive lesson question banks created across all lessons (Medium = Basic, Hard = Advanced).
+			for _, diff := range []domain.Difficulty{domain.DifficultyMedium, domain.DifficultyHard} {
 				q := &domain.Quiz{
 					CourseID:   courseID,
 					Difficulty: diff,
