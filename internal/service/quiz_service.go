@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"strings"
 	"time"
 
@@ -83,23 +82,8 @@ func (s *QuizService) GetQuiz(ctx context.Context, quizID uuid.UUID) (*QuizWithQ
 		}
 	}
 
-	// Shuffle choices for each question and relabel A, B, C, D
-	labels := []string{"A", "B", "C", "D"}
 	for i := range questions {
-		if len(questions[i].Choices) > 1 {
-			shuffled := make([]domain.Choice, len(questions[i].Choices))
-			copy(shuffled, questions[i].Choices)
-			rand.Shuffle(len(shuffled), func(a, b int) {
-				shuffled[a], shuffled[b] = shuffled[b], shuffled[a]
-			})
-			for ci := range shuffled {
-				if ci < len(labels) {
-					shuffled[ci].Label = labels[ci]
-				}
-			}
-			questions[i].Choices = shuffled
-		}
-		// Strip answer from question payload sent to client
+		// Strip answer from question payload sent to client during exam taking
 		questions[i].Answer = ""
 	}
 
@@ -201,8 +185,9 @@ func (s *QuizService) FinishAttempt(ctx context.Context, attemptID uuid.UUID) (*
 }
 
 type AttemptResults struct {
-	Attempt domain.Attempt  `json:"attempt"`
-	Answers []domain.Answer `json:"answers,omitempty"`
+	Attempt   domain.Attempt    `json:"attempt"`
+	Answers   []domain.Answer   `json:"answers,omitempty"`
+	Questions []domain.Question `json:"questions,omitempty"`
 }
 
 func (s *QuizService) GetResults(ctx context.Context, attemptID, userID uuid.UUID) (*AttemptResults, error) {
@@ -219,7 +204,19 @@ func (s *QuizService) GetResults(ctx context.Context, attemptID, userID uuid.UUI
 		return nil, err
 	}
 
-	return &AttemptResults{Attempt: *attempt, Answers: answers}, nil
+	questions := make([]domain.Question, 0, len(answers))
+	for _, a := range answers {
+		q, err := s.quizzes.GetQuestionByID(ctx, a.QuestionID)
+		if err == nil && q != nil {
+			questions = append(questions, *q)
+		}
+	}
+
+	return &AttemptResults{
+		Attempt:   *attempt,
+		Answers:   answers,
+		Questions: questions,
+	}, nil
 }
 
 func (s *QuizService) ResetQuiz(ctx context.Context, quizID, instructorID uuid.UUID) error {
